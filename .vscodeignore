@@ -1,0 +1,8 @@
+**
+!dist/extension.js
+!dist/bridge.js
+!media/**
+!package.json
+!README.md
+!CHANGELOG.md
+!LICENSE

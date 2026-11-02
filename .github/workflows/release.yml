@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck && npm test
+      - run: npm run build -- --production
+      - run: npx vsce package --no-dependencies -o "threadside-${GITHUB_REF_NAME#v}.vsix"
+      - name: GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" threadside-*.vsix --title "$GITHUB_REF_NAME" --notes-file CHANGELOG.md
+      - name: Publish to Open VSX (Cursor, VSCodium, Windsurf)
+        if: env.OVSX_PAT != ''
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: npx ovsx publish threadside-*.vsix -p "$OVSX_PAT"
+      - name: Publish to the Visual Studio Marketplace
+        if: env.VSCE_PAT != ''
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx vsce publish --packagePath threadside-*.vsix -p "$VSCE_PAT"

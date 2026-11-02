@@ -1,0 +1,594 @@
+{
+  "name": "threadside",
+  "displayName": "Threadside: T3 Code chat for Cursor and VS Code",
+  "description": "Use your own T3 Code server as the chat beside your code: every thread, provider, worktree and device from T3 Code, with native file links, diffs, shortcuts and a thread list in the editor.",
+  "version": "0.1.0",
+  "publisher": "luisfelipesena",
+  "preview": true,
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#11141c",
+    "theme": "dark"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luisfelipesena/threadside.git"
+  },
+  "bugs": {
+    "url": "https://github.com/luisfelipesena/threadside/issues"
+  },
+  "homepage": "https://github.com/luisfelipesena/threadside#readme",
+  "engines": {
+    "vscode": "^1.95.0"
+  },
+  "categories": [
+    "AI",
+    "Chat",
+    "Other"
+  ],
+  "keywords": [
+    "t3",
+    "t3 code",
+    "cursor",
+    "agent",
+    "chat",
+    "claude",
+    "codex"
+  ],
+  "extensionKind": [
+    "workspace",
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "Threadside connects to your T3 Code server only after the workspace is trusted."
+    },
+    "virtualWorkspaces": false
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished",
+    "onUri",
+    "onWebviewPanel:threadside.chat"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "threadside",
+          "title": "T3 Threads",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "threadside": [
+        {
+          "id": "threadside.threads",
+          "name": "Threads",
+          "icon": "media/activity.svg",
+          "contextualTitle": "T3 Threads"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "threadside.threads",
+        "contents": "Connect Threadside to a T3 Code server to see your threads here.\n[Connect to T3 Code](command:threadside.connect)\nThreadside finds a T3 Code server on this machine on its own. For another machine, paste a pairing link from **Settings \u2192 Sharing & access** or `t3 pair`.",
+        "when": "!threadside.connected"
+      }
+    ],
+    "commands": [
+      {
+        "command": "threadside.openChat",
+        "title": "Open Chat",
+        "category": "T3",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "threadside.toggleChat",
+        "title": "Toggle Chat",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.newThread",
+        "title": "New Thread",
+        "category": "T3",
+        "icon": "$(add)"
+      },
+      {
+        "command": "threadside.newThreadInTab",
+        "title": "New Thread in New Tab",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.searchThreads",
+        "title": "Search Threads\u2026",
+        "category": "T3",
+        "icon": "$(search)"
+      },
+      {
+        "command": "threadside.focusOrAddSelection",
+        "title": "Chat: Focus, or Add Selection",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.openThread",
+        "title": "Open Thread",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.openThreadInNewTab",
+        "title": "Open in New Tab",
+        "category": "T3",
+        "icon": "$(link-external)"
+      },
+      {
+        "command": "threadside.addSelection",
+        "title": "Add Selection to Chat",
+        "category": "T3",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "threadside.addFile",
+        "title": "Add File to Chat",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.focusComposer",
+        "title": "Focus Chat Composer",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.toggleMaximize",
+        "title": "Toggle Full Screen Chat",
+        "category": "T3",
+        "icon": "$(screen-full)"
+      },
+      {
+        "command": "threadside.reviewChanges",
+        "title": "Review Thread Changes",
+        "category": "T3",
+        "icon": "$(diff-multiple)"
+      },
+      {
+        "command": "threadside.openWorktree",
+        "title": "Open Thread Worktree in New Window",
+        "category": "T3",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "threadside.sideChat",
+        "title": "Side Chat (/btw)",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.stop",
+        "title": "Stop Running Turn",
+        "category": "T3",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "threadside.settle",
+        "title": "Settle",
+        "category": "T3",
+        "icon": "$(check)"
+      },
+      {
+        "command": "threadside.unsettle",
+        "title": "Un-settle",
+        "category": "T3",
+        "icon": "$(history)"
+      },
+      {
+        "command": "threadside.snooze",
+        "title": "Snooze\u2026",
+        "category": "T3",
+        "icon": "$(bell-slash)"
+      },
+      {
+        "command": "threadside.wake",
+        "title": "Wake",
+        "category": "T3",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "threadside.pin",
+        "title": "Pin",
+        "category": "T3",
+        "icon": "$(pin)"
+      },
+      {
+        "command": "threadside.unpin",
+        "title": "Unpin",
+        "category": "T3",
+        "icon": "$(pinned)"
+      },
+      {
+        "command": "threadside.copyThreadLink",
+        "title": "Copy Thread Link",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.openSettings",
+        "title": "Open T3 Settings",
+        "category": "T3",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "threadside.openInBrowser",
+        "title": "Open Thread in Browser",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.toggleScope",
+        "title": "Toggle: This Workspace / All Projects",
+        "category": "T3",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "threadside.refresh",
+        "title": "Reconnect",
+        "category": "T3",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "threadside.connect",
+        "title": "Connect to T3 Code\u2026",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.disconnect",
+        "title": "Disconnect and Forget Credentials",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.takeOverShortcuts",
+        "title": "Use T3 for Cursor Chat Shortcuts",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.restoreShortcuts",
+        "title": "Restore Cursor Chat Shortcuts",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.showLog",
+        "title": "Show Log",
+        "category": "T3"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "threadside.newThread",
+          "when": "view == threadside.threads",
+          "group": "navigation@1"
+        },
+        {
+          "command": "threadside.searchThreads",
+          "when": "view == threadside.threads",
+          "group": "navigation@2"
+        },
+        {
+          "command": "threadside.toggleScope",
+          "when": "view == threadside.threads",
+          "group": "navigation@3"
+        },
+        {
+          "command": "threadside.refresh",
+          "when": "view == threadside.threads",
+          "group": "navigation@4"
+        },
+        {
+          "command": "threadside.openSettings",
+          "when": "view == threadside.threads",
+          "group": "overflow@1"
+        },
+        {
+          "command": "threadside.takeOverShortcuts",
+          "when": "view == threadside.threads",
+          "group": "overflow@2"
+        },
+        {
+          "command": "threadside.disconnect",
+          "when": "view == threadside.threads",
+          "group": "overflow@9"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "threadside.settle",
+          "when": "view == threadside.threads && viewItem =~ /thread:(active|pinned)/",
+          "group": "inline@1"
+        },
+        {
+          "command": "threadside.wake",
+          "when": "view == threadside.threads && viewItem =~ /thread:snoozed/",
+          "group": "inline@1"
+        },
+        {
+          "command": "threadside.unsettle",
+          "when": "view == threadside.threads && viewItem =~ /thread:settled/",
+          "group": "inline@1"
+        },
+        {
+          "command": "threadside.openThreadInNewTab",
+          "when": "view == threadside.threads && viewItem =~ /^thread:/",
+          "group": "1_open@1"
+        },
+        {
+          "command": "threadside.reviewChanges",
+          "when": "view == threadside.threads && viewItem =~ /\\+worktree/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "threadside.openWorktree",
+          "when": "view == threadside.threads && viewItem =~ /\\+worktree/",
+          "group": "1_open@3"
+        },
+        {
+          "command": "threadside.pin",
+          "when": "view == threadside.threads && viewItem =~ /thread:(active|snoozed|settled)/",
+          "group": "2_state@1"
+        },
+        {
+          "command": "threadside.unpin",
+          "when": "view == threadside.threads && viewItem =~ /thread:pinned/",
+          "group": "2_state@1"
+        },
+        {
+          "command": "threadside.snooze",
+          "when": "view == threadside.threads && viewItem =~ /thread:(active|pinned)/",
+          "group": "2_state@2"
+        },
+        {
+          "command": "threadside.settle",
+          "when": "view == threadside.threads && viewItem =~ /thread:(active|pinned|snoozed)/",
+          "group": "2_state@3"
+        },
+        {
+          "command": "threadside.stop",
+          "when": "view == threadside.threads && viewItem =~ /\\+running/",
+          "group": "2_state@4"
+        },
+        {
+          "command": "threadside.copyThreadLink",
+          "when": "view == threadside.threads && viewItem =~ /^thread:/",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "threadside.openInBrowser",
+          "when": "view == threadside.threads && viewItem =~ /^thread:/",
+          "group": "3_copy@2"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "threadside.toggleMaximize",
+          "when": "activeWebviewPanelId == 'threadside.chat'",
+          "group": "navigation@1"
+        },
+        {
+          "command": "threadside.reviewChanges",
+          "when": "activeWebviewPanelId == 'threadside.chat' && threadside.activeHasWorktree",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "threadside.addSelection",
+          "when": "editorHasSelection && threadside.connected",
+          "group": "t3@1"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "threadside.addFile",
+          "when": "threadside.connected && !explorerResourceIsFolder",
+          "group": "t3@1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "threadside.openThread",
+          "when": "false"
+        },
+        {
+          "command": "threadside.openThreadInNewTab",
+          "when": "false"
+        },
+        {
+          "command": "threadside.settle",
+          "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.snooze",
+          "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.pin",
+          "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.unpin",
+          "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.wake",
+          "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.unsettle",
+          "when": "threadside.connected"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "threadside.toggleChat",
+        "key": "ctrl+cmd+l",
+        "mac": "ctrl+cmd+l",
+        "win": "ctrl+alt+l",
+        "linux": "ctrl+alt+l"
+      },
+      {
+        "command": "threadside.addSelection",
+        "key": "ctrl+shift+l",
+        "mac": "cmd+shift+l",
+        "when": "editorTextFocus && editorHasSelection && threadside.connected"
+      },
+      {
+        "command": "threadside.searchThreads",
+        "key": "ctrl+alt+h",
+        "mac": "ctrl+cmd+h",
+        "when": "threadside.connected"
+      },
+      {
+        "command": "threadside.newThread",
+        "key": "ctrl+alt+n",
+        "mac": "ctrl+cmd+n",
+        "when": "threadside.connected"
+      },
+      {
+        "command": "threadside.toggleMaximize",
+        "key": "ctrl+alt+e",
+        "mac": "ctrl+cmd+e",
+        "when": "activeWebviewPanelId == 'threadside.chat'"
+      },
+      {
+        "command": "threadside.reviewChanges",
+        "key": "ctrl+alt+r",
+        "mac": "ctrl+cmd+r",
+        "when": "threadside.connected && threadside.activeHasWorktree"
+      },
+      {
+        "command": "threadside.newThread",
+        "key": "ctrl+n",
+        "mac": "cmd+n",
+        "when": "activeWebviewPanelId == 'threadside.chat'"
+      },
+      {
+        "command": "threadside.toggleChat",
+        "key": "ctrl+i",
+        "mac": "cmd+i",
+        "when": "activeWebviewPanelId == 'threadside.chat'"
+      }
+    ],
+    "configuration": {
+      "title": "Threadside",
+      "properties": {
+        "threadside.serverUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "T3 Code server to use, for example `https://my-mac.tailnet.ts.net`. Leave empty to use the T3 Code server on the machine where this workspace runs (found in `~/.t3/userdata/server-runtime.json`)."
+        },
+        "threadside.t3Home": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "T3 Code data folder. Defaults to `$T3CODE_HOME` or `~/.t3`."
+        },
+        "threadside.chatLocation": {
+          "type": "string",
+          "enum": [
+            "beside",
+            "active"
+          ],
+          "default": "beside",
+          "enumDescriptions": [
+            "Open the chat in an editor group to the right, like Cursor's chat tabs.",
+            "Open the chat in the active editor group."
+          ],
+          "description": "Where the chat tab opens."
+        },
+        "threadside.openChatOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "Reopen the chat beside the editor when a window starts and no chat tab was restored."
+        },
+        "threadside.threadScope": {
+          "type": "string",
+          "enum": [
+            "workspace",
+            "all"
+          ],
+          "default": "workspace",
+          "description": "Show threads of the projects in this workspace, or every project on the server."
+        },
+        "threadside.settledLimit": {
+          "type": "number",
+          "default": 25,
+          "minimum": 0,
+          "description": "How many settled threads the list shows."
+        },
+        "threadside.openFileLinksInEditor": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Open file links from chat in this editor at the referenced line. Hold `Alt` while clicking to use T3 Code's own file preview instead."
+        },
+        "threadside.notifications": {
+          "type": "string",
+          "enum": [
+            "attention",
+            "all",
+            "off"
+          ],
+          "default": "attention",
+          "enumDescriptions": [
+            "Notify when a thread needs an approval or an answer, fails, or hits a usage limit.",
+            "Also notify when a thread finishes a turn.",
+            "Never notify."
+          ],
+          "description": "Native notifications for threads while the chat is hidden."
+        },
+        "threadside.syncTheme": {
+          "type": "boolean",
+          "default": true,
+          "description": "Follow the editor's light or dark theme in the chat."
+        },
+        "threadside.matchEditorColors": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the editor theme's background, surfaces, borders and fonts in the chat, so it looks like part of the editor. Turn off to keep T3 Code's own theme."
+        },
+        "threadside.editorKeysInChat": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "mod+i",
+            "mod+shift+h",
+            "mod+'",
+            "mod+p",
+            "mod+shift+p",
+            "mod+e",
+            "mod+r",
+            "mod+j",
+            "mod+shift+e",
+            "mod+shift+f",
+            "mod+shift+x"
+          ],
+          "markdownDescription": "Shortcuts that go to the editor even while the chat has focus, written like `mod+shift+p` (`mod` is \u2318 on macOS and Ctrl elsewhere). Every other shortcut goes to T3 Code first and reaches the editor only when T3 Code leaves it unused. The defaults keep \u2318I (toggle chat), \u21e7\u2318H (thread search) and the editor's navigation working from the chat."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node --test --experimental-strip-types test/*.test.ts",
+    "package": "npm run typecheck && npm test && npm run build -- --production && vsce package --no-dependencies",
+    "contract": "node scripts/contract-check.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "1.95.0",
+    "@vscode/vsce": "^3.6.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0"
+  }
+}

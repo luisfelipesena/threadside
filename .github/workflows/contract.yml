@@ -1,0 +1,39 @@
+name: T3 Code contract
+
+# Runs Threadside's contract check against the newest T3 Code nightly every day, so an upstream
+# protocol or UI change is caught here before it reaches anyone's editor.
+on:
+  schedule:
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "npm dist-tag of t3 to test (nightly, latest, preview)"
+        default: nightly
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Start a headless T3 Code server
+        env:
+          CHANNEL: ${{ inputs.channel || 'nightly' }}
+        run: |
+          npm install --global "t3@${CHANNEL}"
+          export T3CODE_HOME="$RUNNER_TEMP/t3"
+          mkdir -p "$T3CODE_HOME"
+          nohup t3 serve --no-browser --host 127.0.0.1 --port 3773 --base-dir "$T3CODE_HOME" > "$RUNNER_TEMP/t3.log" 2>&1 &
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:3773/.well-known/t3/environment && break; sleep 1; done
+      - name: Check the contract
+        run: T3CODE_HOME="$RUNNER_TEMP/t3" T3_URL=http://127.0.0.1:3773 node scripts/contract-check.mjs
+      - name: Server log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/t3.log"
