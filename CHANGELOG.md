@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.1
+
+- File links open the right file when the agent wrote a bare or partial path (`observability.py:10`): Threadside searches the thread's worktree, the open workspace and the project for it, opens a single match at its line and asks when several files match.
+- The T3 icon is back in the activity bar as a launcher: clicking it opens the chat beside the code, focused on the composer, and its view holds quick actions (new thread, search, review, connect). No second thread list.
+
 ## 0.2.0
 
 - One thread list: T3 Code's own. The activity-bar list is gone, and the narrow chat starts with T3 Code's sidebar closed (⌘B brings it back).

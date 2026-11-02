@@ -2,7 +2,7 @@
   "name": "threadside",
   "displayName": "Threadside: T3 Code chat for Cursor and VS Code",
   "description": "Your own T3 Code server's chat beside your code: every thread, provider, worktree and device from T3 Code, with file links that open in the editor, selection and file chips, review in the diff view and Cursor-style shortcuts.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "luisfelipesena",
   "preview": true,
   "license": "MIT",
@@ -425,7 +425,38 @@
           "description": "Open the chat with T3 Code's own thread sidebar closed when the column is narrow, so the conversation gets the room. \u2318B or full screen brings it back."
         }
       }
-    }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "threadside",
+          "title": "T3 Chat",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "threadside": [
+        {
+          "id": "threadside.launcher",
+          "name": "T3 Chat",
+          "icon": "media/activity.svg",
+          "contextualTitle": "T3 Chat"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "threadside.launcher",
+        "when": "threadside.connected",
+        "contents": "The chat opens beside your code.\n[Open Chat](command:threadside.openChat)\n[New Thread](command:threadside.newThread)\n[Search Threads](command:threadside.searchThreads)\n[Review Thread Changes](command:threadside.reviewChanges)\n\u2318I opens or hides the chat, \u2318L adds the selection or file, \u21e7\u2318H searches threads. Run [Use T3 for Cursor Chat Shortcuts](command:threadside.takeOverShortcuts) to use these keys."
+      },
+      {
+        "view": "threadside.launcher",
+        "when": "!threadside.connected",
+        "contents": "Threadside is not connected to a T3 Code server.\n[Connect to T3 Code](command:threadside.connect)\nA server on this machine (or the remote one in an SSH window) is found on its own. For another machine, paste a pairing link from T3 Code \u2192 Settings \u2192 Sharing & access, or from `t3 pair`.\n[Show Log](command:threadside.showLog)"
+      }
+    ]
   },
   "scripts": {
     "build": "node scripts/build.mjs",

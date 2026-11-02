@@ -1,5 +1,3 @@
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { relative as relativePath } from "node:path";
 import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
@@ -8,7 +6,8 @@ import { isRunning, limitResetAt, sectionOf, type ThreadShell } from "./connecti
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
-import { isInside, mentionFor, parseFileHref } from "./native/fileLinks";
+import { isInside, mentionFor } from "./native/fileLinks";
+import { resolveFileLink } from "./native/resolveFile";
 import { reviewChanges } from "./native/review";
 import { lockChatGroup } from "./native/chatDock";
 import { relative, statusLabel } from "./native/threadInfo";
@@ -46,6 +45,13 @@ class Controller implements vscode.Disposable {
     this.environment = new Environment(context.secrets);
     this.proxy = new AuthProxy(vscode.Uri.joinPath(context.extensionUri, "dist", "bridge.js").fsPath);
     this.scope = config().get("threadScope", "workspace");
+    // The activity-bar icon is a launcher: showing its view opens the chat beside the code. The view
+    // itself only holds quick actions (welcome content), so there is no second thread list.
+    const launcher = vscode.window.createTreeView("threadside.launcher", { treeDataProvider: { getTreeItem: (item: vscode.TreeItem) => item, getChildren: () => [] } });
+    launcher.onDidChangeVisibility(({ visible }) => {
+      if (visible && this.environment.status.kind === "connected") void this.openChat().then((chat) => chat.focusComposer());
+    });
+    this.disposables.push(launcher);
     this.statusItem = vscode.window.createStatusBarItem("threadside.status", vscode.StatusBarAlignment.Right, 1000);
     this.statusItem.name = "T3 Code";
     this.statusItem.command = "threadside.toggleChat";
@@ -233,16 +239,14 @@ class Controller implements vscode.Disposable {
   private async openFile(panel: ChatPanel, href: string, beside: boolean): Promise<void> {
     const threadId = threadIdFromPath(panel.path);
     const thread = threadId ? this.environment.shell.threads.get(threadId) : undefined;
-    const base = thread ? this.threadDir(thread) : vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    const target = parseFileHref(href, base, homedir());
-    if (!target) {
-      log().info(`Not a file link: ${redact(href)}`);
-      return;
-    }
-    if (!existsSync(target.path)) {
-      void vscode.window.showWarningMessage(`${target.path} is not on this machine. Alt-click the link to preview it in T3 Code.`);
-      return;
-    }
+    // Most specific first: the thread's own worktree, the code open in this window, then the project root.
+    const bases = [
+      thread?.worktreePath ?? undefined,
+      ...(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+      thread ? this.environment.shell.projects.get(thread.projectId)?.workspaceRoot : undefined,
+    ].filter((base): base is string => Boolean(base));
+    const target = await resolveFileLink(href, bases, (path) => this.workspaceUri(path));
+    if (!target) return;
     const uri = this.workspaceUri(target.path);
     const line = Math.max(0, (target.line ?? 1) - 1);
     const start = new vscode.Position(line, Math.max(0, (target.column ?? 1) - 1));

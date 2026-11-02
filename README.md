@@ -11,9 +11,10 @@ The chat is T3 Code's own web app, served by your server, so every provider, acc
 ## What you get
 
 - **The full T3 Code chat beside your code.** It opens in a column to the right, in the editor's theme, background and fonts, and that column is locked: files you open, and files dropped on it, go to your code column instead of splitting the chat. Any number of chat tabs, one thread each, restored after a reload.
+- **A T3 icon in the activity bar** opens the chat (as does <kbd>⌘I</kbd> or the **T3** status bar item); its view keeps quick actions only.
 - **One thread list, T3 Code's own.** Pin, settle, snooze and drag work as in the app. In the narrow column the chat starts with that sidebar closed so the conversation has the room; <kbd>⌘B</kbd> or full screen brings it back. <kbd>⇧⌘H</kbd> searches every thread from anywhere.
 - **Answers that read like Cursor's.** Markdown, tables, Mermaid diagrams, syntax-highlighted code with copy buttons, HTML visual replies and MCP apps, rendered by T3 Code.
-- **File links that open in the editor.** Clicking `src/app.ts:42` in an answer opens that file at that line, in the thread's own worktree when it has one. Alt-click keeps T3 Code's preview.
+- **File links that open in the editor.** Clicking `src/app.ts:42` in an answer opens that file at that line in your code column, in the thread's own worktree when it has one. A bare or partial path (`observability.py:10`) is found in the worktree, the open workspace or the project; when several files match you pick one. Alt-click keeps T3 Code's preview.
 - **Code into the chat.** <kbd>⌘L</kbd> adds the selected lines as an `app.ts:10-24` chip, or the whole file when nothing is selected. **Add to T3 Chat** in the Explorer (several files at once) and on editor tabs does the same, so does dragging files onto the chat with <kbd>Shift</kbd> held, and T3 Code's own `@` finds any file.
 - **Native review.** **Review Thread Changes** opens the thread's uncommitted work, or its whole branch, in the editor's multi-file diff.
 - **Side chats, forks, worktrees, devices, previews** and everything else in T3 Code work in the tab as they do in the app.
