@@ -2,6 +2,7 @@ import { relative as relativePath } from "node:path";
 import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
+import { sidebarProjectKey } from "./connection/projectKey";
 import { isRunning, limitResetAt, sectionOf, type ThreadShell } from "./connection/shell";
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
@@ -13,9 +14,10 @@ import { lockChatGroup } from "./native/chatDock";
 import { relative, statusLabel } from "./native/threadInfo";
 import { AuthProxy } from "./proxy/authProxy";
 import { threadIdFromPath, threadPath } from "./routes";
-import { type BridgeMessage, ChatPanel, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
+import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
 
 const PORT_KEY = "threadside.proxyPort";
+const DOCKED_KEY = "threadside.dockedOnRight";
 
 export function activate(context: vscode.ExtensionContext): void {
   setExtensionUri(context.extensionUri);
@@ -40,18 +42,16 @@ class Controller implements vscode.Disposable {
   private lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
   /** Set when ⌘I hid the chat by maximizing the file group. */
   private chatHidden = false;
+  /** The docked chat, once the editor has shown its view. */
+  private sideView: ChatPanel | undefined;
+  private sideViewWaiters: Array<(chat: ChatPanel) => void> = [];
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.environment = new Environment(context.secrets);
     this.proxy = new AuthProxy(vscode.Uri.joinPath(context.extensionUri, "dist", "bridge.js").fsPath);
     this.scope = config().get("threadScope", "workspace");
-    // The activity-bar icon is a launcher: showing its view opens the chat beside the code. The view
-    // itself only holds quick actions (welcome content), so there is no second thread list.
-    const launcher = vscode.window.createTreeView("threadside.launcher", { treeDataProvider: { getTreeItem: (item: vscode.TreeItem) => item, getChildren: () => [] } });
-    launcher.onDidChangeVisibility(({ visible }) => {
-      if (visible && this.environment.status.kind === "connected") void this.openChat().then((chat) => chat.focusComposer());
-    });
-    this.disposables.push(launcher);
+    // T3 Code's thread list starts filtered to the projects open in this window.
+    this.proxy.boot = () => ({ projectScopeKeys: this.projectScopeKeys() });
     this.statusItem = vscode.window.createStatusBarItem("threadside.status", vscode.StatusBarAlignment.Right, 1000);
     this.statusItem.name = "T3 Code";
     this.statusItem.command = "threadside.toggleChat";
@@ -66,6 +66,11 @@ class Controller implements vscode.Disposable {
           this.adopt(new ChatPanel(panel, this.chatHost(), state as { path?: string } | undefined));
         },
       }),
+      vscode.window.registerWebviewViewProvider(
+        SIDE_VIEW_ID,
+        { resolveWebviewView: (view, context) => this.adoptSideView(view, context.state as { path?: string } | undefined) },
+        { webviewOptions: { retainContextWhenHidden: true } },
+      ),
       vscode.window.registerUriHandler({ handleUri: (uri) => this.handleUri(uri) }),
       this.environment.onDidChangeStatus((status) => {
         if (status.kind === "connected") {
@@ -100,7 +105,68 @@ class Controller implements vscode.Disposable {
       return;
     }
     await this.environment.connect();
-    if (config().get("openChatOnStartup", false) && this.panels.size === 0) await this.openChat();
+    await this.dockOnRightOnce();
+    if (config().get("openChatOnStartup", false) && this.panels.size === 0) await this.openChat({ preserveFocus: true });
+  }
+
+  /**
+   * Cursor keeps extensions out of its Secondary Side Bar, but a view can still be moved there and
+   * the editor remembers where. On first run the chat moves to the right, like Cursor's own chat;
+   * moving it anywhere else later is the user's choice and stays.
+   */
+  private async dockOnRightOnce(): Promise<void> {
+    if (sideLocation() !== "side" || this.context.globalState.get(DOCKED_KEY)) return;
+    await this.context.globalState.update(DOCKED_KEY, true);
+    try {
+      // For a view alone in its Side Bar container the destination picker lists "New Panel Entry",
+      // then "New Secondary Side Bar Entry".
+      await vscode.commands.executeCommand("workbench.action.moveFocusedView", SIDE_VIEW_ID);
+      await vscode.commands.executeCommand("quickInput.next");
+      await vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem");
+      log().info("Moved the chat to the Secondary Side Bar.");
+    } catch (error) {
+      log().warn(`Could not move the chat to the Secondary Side Bar: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private adoptSideView(view: vscode.WebviewView, state: { path?: string } | undefined): void {
+    const chat = new ChatPanel(view, this.chatHost(), state ?? { path: this.context.workspaceState.get<string>("threadside.sidePath") });
+    this.sideView = chat;
+    // A fresh docked chat starts a draft in the repository this window is coding in.
+    if (!state?.path && !this.context.workspaceState.get<string>("threadside.sidePath")) {
+      chat.onFirstReady = () => this.runT3Shortcut(chat, "chat.new", this.workspaceProject()?.title);
+    }
+    chat.onDidDispose(() => {
+      if (this.sideView === chat) this.sideView = undefined;
+    });
+    this.adopt(chat);
+    for (const resolve of this.sideViewWaiters.splice(0)) resolve(chat);
+  }
+
+  /** Shows the docked chat, asking the editor to create its view the first time. */
+  private async showSideView(preserveFocus = false): Promise<ChatPanel> {
+    if (this.sideView) {
+      this.sideView.reveal(preserveFocus);
+      return this.sideView;
+    }
+    const ready = new Promise<ChatPanel>((resolve, reject) => {
+      this.sideViewWaiters.push(resolve);
+      setTimeout(() => reject(new Error("The chat view did not open.")), 10_000);
+    });
+    await vscode.commands.executeCommand(`${SIDE_VIEW_ID}.focus`);
+    return ready;
+  }
+
+  /** T3 Code thread-list keys for the projects open in this window (see `scopeProjects`). */
+  private projectScopeKeys(): string[] | undefined {
+    const environmentId = this.environment.descriptor?.environmentId;
+    const scope = this.scopeProjects();
+    if (!environmentId || !scope) return undefined;
+    const keys = [...scope]
+      .map((id) => this.environment.shell.projects.get(id))
+      .filter((project) => project && !project.isScratch && !project.archivedAt)
+      .map((project) => sidebarProjectKey(project!, environmentId));
+    return keys.length ? [...new Set(keys)].sort() : undefined;
   }
 
   // ---------------------------------------------------------------- panels
@@ -143,13 +209,22 @@ class Controller implements vscode.Disposable {
   }
 
   private async openChat(options: { path?: string; newTab?: boolean; preserveFocus?: boolean } = {}): Promise<ChatPanel> {
-    const existing = !options.newTab ? this.activePanel ?? [...this.panels][0] : undefined;
+    // The chat in focus keeps the request; otherwise a visible thread tab; otherwise the docked chat.
+    const tabs = [...this.panels].filter((panel) => !panel.isSideView);
+    const tab = this.activePanel?.panel && this.activePanel.visible ? this.activePanel : tabs.find((panel) => panel.active);
+    const existing = options.newTab
+      ? undefined
+      : this.activePanel?.active
+        ? this.activePanel
+        : sideLocation() === "side"
+          ? (tab ?? (await this.showSideView(options.preserveFocus)))
+          : (tab ?? this.activePanel ?? tabs[0]);
     if (existing) {
       if (options.path) existing.navigate(options.path);
       existing.reveal(options.preserveFocus);
       return existing;
     }
-    const beside = config().get("chatLocation", "beside") === "beside";
+    const beside = sideLocation() !== "active";
     const groupsBefore = vscode.window.tabGroups.all.length;
     const panel = vscode.window.createWebviewPanel(
       VIEW_TYPE,
@@ -169,11 +244,12 @@ class Controller implements vscode.Disposable {
   }
 
   private onPanelChanged(): void {
-    const active = [...this.panels].find((panel) => panel.panel.active);
+    const active = [...this.panels].find((panel) => panel.active);
     if (active) {
       this.activePanel = active;
-      void lockChatGroup(isChatTab);
+      if (active.panel) void lockChatGroup(isChatTab);
     }
+    if (this.sideView?.path) void this.context.workspaceState.update("threadside.sidePath", this.sideView.path);
     const thread = this.activeThread();
     void vscode.commands.executeCommand("setContext", "threadside.activeHasWorktree", Boolean(thread && this.threadDir(thread)));
     this.updatePanelTitles();
@@ -184,9 +260,8 @@ class Controller implements vscode.Disposable {
     for (const panel of this.panels) {
       const id = panel.threadId;
       const thread = id ? this.environment.shell.threads.get(id) : undefined;
-      const title = thread?.title ?? (panel.path.startsWith("/settings") ? "T3 Settings" : "T3");
-      const label = thread && isRunning(thread) ? `${title}` : title;
-      if (panel.panel.title !== label) panel.panel.title = label;
+      const title = thread?.title ?? (panel.path.startsWith("/settings") ? "T3 Settings" : "New Thread");
+      panel.setTitle(panel.isSideView && !thread ? "" : title);
     }
   }
 
@@ -230,6 +305,17 @@ class Controller implements vscode.Disposable {
       case "focus":
         this.activePanel = panel;
         this.onPanelChanged();
+        break;
+      case "copyText":
+        if (typeof message.text === "string") {
+          void vscode.env.clipboard.writeText(message.text);
+          vscode.window.setStatusBarMessage("$(check) Copied", 1500);
+        }
+        break;
+      case "openThreadInTab":
+        if (typeof message.threadId === "string" && message.environmentId === this.environment.descriptor?.environmentId) {
+          void this.openThread(message.threadId, true);
+        }
         break;
       default:
         break;
@@ -341,9 +427,13 @@ class Controller implements vscode.Disposable {
       chat.insertMentions(files.slice(0, 50).map((file) => mentionFor(this.mentionPath(file.fsPath))));
     });
     command("threadside.toggleMaximize", async () => {
-      if (!this.activePanel?.panel.active) await this.openChat();
+      // The docked chat opens its thread as a full editor tab; a tab maximizes its group.
+      if (this.activePanel?.isSideView || (sideLocation() === "side" && !this.activePanel?.panel?.active)) return this.popOut();
+      if (!this.activePanel?.panel?.active) await this.openChat();
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
     });
+    command("threadside.popOut", () => this.popOut());
+    command("threadside.dockOnRight", () => vscode.commands.executeCommand("workbench.action.moveFocusedView", SIDE_VIEW_ID));
     command("threadside.sideChat", async () => {
       const chat = await this.openChat();
       chat.insert("/btw ");
@@ -410,10 +500,17 @@ class Controller implements vscode.Disposable {
    * maximizing the file group, so the conversation keeps running and comes back as it was.
    */
   private async toggleChat(): Promise<void> {
-    const panel = this.activePanel ?? [...this.panels][0];
-    const chatGroup = panel?.panel.viewColumn;
+    const side = this.sideView;
+    if (side?.active || (sideLocation() === "side" && !this.activePanel?.panel?.active)) {
+      if (side?.active) return this.hideSideView();
+      const chat = await this.openChat();
+      chat.focusComposer();
+      return;
+    }
+    const panel = this.activePanel?.panel ? this.activePanel : [...this.panels].find((candidate) => candidate.panel);
+    const chatGroup = panel?.panel?.viewColumn;
     const separateGroup = chatGroup !== undefined && chatGroup !== this.fileColumn() && vscode.window.tabGroups.all.length > 1;
-    if (panel?.panel.active) {
+    if (panel?.panel?.active) {
       await this.focusFileGroup();
       if (separateGroup) {
         await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
@@ -421,7 +518,7 @@ class Controller implements vscode.Disposable {
       }
       return;
     }
-    if (panel && this.chatHidden && !panel.panel.visible) {
+    if (panel && this.chatHidden && !panel.visible) {
       await this.focusFileGroup();
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
     }
@@ -430,12 +527,32 @@ class Controller implements vscode.Disposable {
     chat.focusComposer();
   }
 
+  /** Hides the docked chat wherever it sits (Secondary Side Bar, Side Bar or panel) and returns to the code. */
+  private async hideSideView(): Promise<void> {
+    const side = this.sideView;
+    const closers = ["workbench.action.toggleAuxiliaryBar", "workbench.action.closeSidebar", "workbench.action.closePanel"];
+    for (const [index, closer] of closers.entries()) {
+      await vscode.commands.executeCommand(closer);
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      if (!side?.visible) break;
+      // Toggling the Secondary Side Bar did not hide the chat, so it lives elsewhere: show the bar again.
+      if (index === 0) await vscode.commands.executeCommand(closer);
+    }
+    await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  }
+
+  /** Opens the docked chat's thread as an editor tab, for a wide view or to keep it beside another thread. */
+  private async popOut(): Promise<void> {
+    const path = (this.activePanel ?? this.sideView)?.path;
+    await this.openChat({ path: path && path !== "/" ? path : undefined, newTab: true });
+  }
+
   /**
    * ⌘N in the chat and ⌘' anywhere. T3 Code's own new thread keeps the open thread's project; from the
    * editor, a file in another repository wins, as in Cursor, so the draft starts in the code you are in.
    */
   private async newThread(): Promise<void> {
-    const fromChat = this.activePanel?.panel.active === true;
+    const fromChat = this.activePanel?.active === true;
     const target = fromChat ? undefined : this.workspaceProject();
     const chat = await this.openChat();
     const currentId = chat.threadId ? this.environment.shell.threads.get(chat.threadId)?.projectId : undefined;
@@ -668,7 +785,7 @@ class Controller implements vscode.Disposable {
       }
       this.lastSeen.set(id, thread);
       if (mode === "off" || !before || (scope && !scope.has(thread.projectId))) continue;
-      const visible = [...this.panels].some((panel) => panel.threadId === id && panel.panel.visible && vscode.window.state.focused);
+      const visible = [...this.panels].some((panel) => panel.threadId === id && panel.visible && vscode.window.state.focused);
       if (visible) continue;
       let message: string | undefined;
       let severity: "info" | "warning" | "error" = "info";
@@ -694,7 +811,7 @@ class Controller implements vscode.Disposable {
   }
 
   dispose(): void {
-    for (const panel of this.panels) panel.panel.dispose();
+    for (const panel of this.panels) panel.panel?.dispose();
     for (const disposable of this.disposables) disposable.dispose();
   }
 }
@@ -705,6 +822,12 @@ function isChatTab(tab: vscode.Tab): boolean {
 
 function config(): vscode.WorkspaceConfiguration {
   return vscode.workspace.getConfiguration("threadside");
+}
+
+/** Where the chat opens: docked in a side bar (the default), an editor group beside the code, or the active group. */
+function sideLocation(): "side" | "beside" | "active" {
+  const value = config().get<string>("chatLocation", "side");
+  return value === "beside" || value === "active" ? value : "side";
 }
 
 async function pickSnooze(): Promise<Date | undefined> {

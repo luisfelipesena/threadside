@@ -36,6 +36,8 @@ export interface ProjectShell {
   title: string;
   workspaceRoot: string;
   archivedAt?: string | null;
+  isScratch?: boolean;
+  repositoryIdentity?: { canonicalKey: string; origin?: { canonicalKey?: string } | null } | null;
 }
 
 type ShellItem =

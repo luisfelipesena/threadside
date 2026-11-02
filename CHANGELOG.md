@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- The chat docks on the right, in the Secondary Side Bar next to Cursor's agent, and stays there. ⌘I shows or hides it; its title bar has New Thread, Search Threads and Open in Editor Tab. `threadside.chatLocation` still opens it as an editor tab instead.
+- Several threads at once: Open Thread in Editor Tab, or a middle click on a thread in T3 Code's list, opens it as its own editor tab.
+- T3 Code's thread list starts filtered to the projects open in the window.
+- ⌘V pastes text and images into the chat; ⌘C, ⌘X, ⌘A and ⌘Z work there; copy buttons no longer fail with "Failed to copy".
+- T3: Side Chat waits for the chat to take focus before typing `/btw`.
+- Threadside now always runs where the code is (the remote side of an SSH window), so a remote window uses that machine's T3 Code server.
+- A chat that is not connected shows Connect and Show Log instead of a blank page.
+- New icon, legible at 16 px; editor tabs for a new thread read "New Thread".
+
 ## 0.2.1
 
 - File links open the right file when the agent wrote a bare or partial path (`observability.py:10`): Threadside searches the thread's worktree, the open workspace and the project for it, opens a single match at its line and asks when several files match.

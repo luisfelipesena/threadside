@@ -82,7 +82,7 @@ while (queue.length && seen.size < 400) {
     if (!seen.has(next)) queue.push(next);
   }
 }
-for (const marker of ["composer-editor", "chat-markdown-file-link", "application/x-t3code-composer-mention", "Expand composer", "prefers-color-scheme", "sidebar-wrapper", "data-sidebar-state"]) {
+for (const marker of ["composer-editor", "chat-markdown-file-link", "application/x-t3code-composer-mention", "Expand composer", "prefers-color-scheme", "sidebar-wrapper", "data-sidebar-state", "data-thread-item", "t3code:ui-state:v1", "sidebarProjectScopeKeys"]) {
   check(bundle.includes(marker), `web bundle still contains "${marker}"`);
 }
 

@@ -2,7 +2,7 @@
 
 > **Unofficial.** Threadside is a community extension. It is not made, endorsed or supported by T3 Tools Inc. or the T3 Code team. It needs your own [T3 Code](https://github.com/pingdotgg/t3code) server and works with no Cursor or AI subscription of its own.
 
-Threadside puts T3 Code's chat in a locked column beside your code, the way Cursor's chat sits there, and wires it into the editor: file links open at the right line in your code column, the selection or the current file becomes context with one shortcut, and a thread's changes open in the editor's diff view.
+Threadside docks T3 Code's chat on the right of your editor, where Cursor's chat sits, and wires it into the editor: file links open at the right line in your code column, the selection or the current file becomes context with one shortcut, and a thread's changes open in the editor's diff view.
 
 The chat is T3 Code's own web app, served by your server, so every provider, account, worktree, side chat, device and setting T3 Code has is already there, and it updates when your server does.
 
@@ -10,14 +10,15 @@ The chat is T3 Code's own web app, served by your server, so every provider, acc
 
 ## What you get
 
-- **The full T3 Code chat beside your code.** It opens in a column to the right, in the editor's theme, background and fonts, and that column is locked: files you open, and files dropped on it, go to your code column instead of splitting the chat. Any number of chat tabs, one thread each, restored after a reload.
-- **A T3 icon in the activity bar** opens the chat (as does <kbd>⌘I</kbd> or the **T3** status bar item); its view keeps quick actions only.
-- **One thread list, T3 Code's own.** Pin, settle, snooze and drag work as in the app. In the narrow column the chat starts with that sidebar closed so the conversation has the room; <kbd>⌘B</kbd> or full screen brings it back. <kbd>⇧⌘H</kbd> searches every thread from anywhere.
+- **The full T3 Code chat, docked on the right.** On first run the chat moves to the Secondary Side Bar, next to Cursor's own agent, and stays there across files and windows, in the editor's theme, background and fonts. <kbd>⌘I</kbd> shows or hides it; the title bar has **New Thread**, **Search Threads** and **Open in Editor Tab**.
+- **Several threads at once.** The docked chat holds the thread you are on; **Open Thread in Editor Tab** (or a middle click on a thread in the list) opens another one as an editor tab, which you can split beside your code or beside other threads. Editor tabs are restored after a reload.
+- **One thread list, T3 Code's own, filtered to this window.** The list starts filtered to the projects open in the window (a folder that holds several projects shows all of them); pick another filter in the list and it stays. Pin, settle, snooze and drag work as in the app. <kbd>⌘B</kbd> opens the list; <kbd>⇧⌘H</kbd> searches every thread from anywhere.
+- **Copy and paste that work.** <kbd>⌘V</kbd> pastes text, images and files into the composer, <kbd>⌘C</kbd>, <kbd>⌘X</kbd>, <kbd>⌘A</kbd> and <kbd>⌘Z</kbd> work in the chat, and copy buttons write to your clipboard, over Remote-SSH too.
 - **Answers that read like Cursor's.** Markdown, tables, Mermaid diagrams, syntax-highlighted code with copy buttons, HTML visual replies and MCP apps, rendered by T3 Code.
 - **File links that open in the editor.** Clicking `src/app.ts:42` in an answer opens that file at that line in your code column, in the thread's own worktree when it has one. A bare or partial path (`observability.py:10`) is found in the worktree, the open workspace or the project; when several files match you pick one. Alt-click keeps T3 Code's preview.
 - **Code into the chat.** <kbd>⌘L</kbd> adds the selected lines as an `app.ts:10-24` chip, or the whole file when nothing is selected. **Add to T3 Chat** in the Explorer (several files at once) and on editor tabs does the same, so does dragging files onto the chat with <kbd>Shift</kbd> held, and T3 Code's own `@` finds any file.
 - **Native review.** **Review Thread Changes** opens the thread's uncommitted work, or its whole branch, in the editor's multi-file diff.
-- **Side chats, forks, worktrees, devices, previews** and everything else in T3 Code work in the tab as they do in the app.
+- **Side chats, forks, worktrees, devices, previews** and everything else in T3 Code work as they do in the app. `/btw` (or **T3: Side Chat**) opens a side chat with **Bring back**; **Fork from this response** branches a thread.
 - **Remote-SSH aware.** In a remote window Threadside runs on the remote machine, finds the T3 Code server there and reaches it through the editor's own tunnel.
 - **Clear when something breaks.** A chat that does not load shows why, with **Reload** and **Show Log**; page errors go to the **Threadside** output channel.
 
@@ -52,7 +53,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 | <kbd>⌘L</kbd> | Add the selection, or the current file, to the chat |
 | <kbd>⌘N</kbd> in the chat, <kbd>⌘'</kbd> anywhere | New thread in the repository you are in |
 | <kbd>⇧⌘H</kbd> | Search threads |
-| <kbd>⌥⌘E</kbd> | Full-screen chat |
+| <kbd>⌥⌘E</kbd> | Open the thread in a full editor tab |
 | <kbd>⌥⌘R</kbd> | Review the thread's changes |
 
 Without the takeover the same commands are on <kbd>⌃⌘L</kbd> (chat), <kbd>⌃⌘H</kbd> (search), <kbd>⌃⌘N</kbd> (new thread), <kbd>⌃⌘E</kbd> and <kbd>⌃⌘R</kbd>, and every command is in the Command Palette under **T3:**.
@@ -80,7 +81,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | Setting | Default | |
 |---|---|---|
 | `threadside.serverUrl` | empty | A server to use instead of the one on this machine. |
-| `threadside.chatLocation` | `beside` | Open the chat in a column to the right, or in the active group. |
+| `threadside.chatLocation` | `side` | Dock the chat in a side bar (the Secondary Side Bar on first run), or open it as an editor tab beside the code or in the active group. |
 | `threadside.threadScope` | `workspace` | Thread search lists this window's projects first, or every project equally. |
 | `threadside.compactChat` | `true` | Start the narrow chat with T3 Code's thread sidebar closed. |
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
@@ -90,7 +91,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 
 ## Good to know
 
-- **Cursor keeps its right-hand sidebar for its own agent**, so the chat is a locked editor column instead. <kbd>⌘I</kbd> hides it by maximizing your code column, which keeps the conversation running.
+- **Cursor reserves its right-hand sidebar for its own agent**, so an extension cannot place a view there directly. Threadside moves its chat view there once, on first run, the same way **View: Move View** does; the editor remembers it. Move it anywhere else (or run **T3: Move Chat…**) and it stays where you put it.
 - **Drag files onto the chat with <kbd>Shift</kbd> held** to add them as chips. Cursor and VS Code pass a drag to an extension's view only while Shift is down; without it, the file simply opens in your code column (the chat column is locked, so it never splits).
 - **Voice input** follows T3 Code's web app, which uses your system's dictation.
 - Settled, snoozed and archived threads, usage-limit resets and side chats behave exactly as in T3 Code; see its [docs](https://github.com/pingdotgg/t3code/tree/main/docs/user).

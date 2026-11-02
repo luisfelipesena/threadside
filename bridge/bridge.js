@@ -19,6 +19,26 @@
   const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   window.__threadside = { version: 1 };
 
+  // T3 Code's thread list follows the editor window: the extension names the projects open in it,
+  // and the list's project filter is set to them before the app reads its saved state. It is set
+  // once per set of projects, so a filter chosen later in the list stays.
+  applyProjectScope((window.__threadsideBoot || {}).projectScopeKeys);
+  function applyProjectScope(keys) {
+    if (!Array.isArray(keys) || !keys.length || keys.some((key) => typeof key !== "string")) return;
+    try {
+      const wanted = JSON.stringify(keys);
+      if (localStorage.getItem("threadside:projectScope") === wanted) return;
+      const raw = localStorage.getItem("t3code:ui-state:v1");
+      const ui = raw ? JSON.parse(raw) : {};
+      ui.sidebarProjectScopeKeys = keys;
+      ui.sidebarProjectScopeKey = keys.length === 1 ? keys[0] : null;
+      localStorage.setItem("t3code:ui-state:v1", JSON.stringify(ui));
+      localStorage.setItem("threadside:projectScope", wanted);
+    } catch {
+      // storage unavailable: the list shows every project
+    }
+  }
+
   function readCookie(name) {
     const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
     return match ? decodeURIComponent(match[1]) : undefined;
@@ -172,6 +192,53 @@
     true,
   );
 
+  // Copy, cut, paste, select all, undo and redo are menu commands in the editor. They reach the
+  // webview's outer page, never this frame, so here the keys do nothing unless the bridge runs them.
+  // The browser's own paste keeps images and files from the clipboard.
+  const EDITING = { "mod+c": "copy", "mod+x": "cut", "mod+v": "paste", "mod+a": "selectAll", "mod+z": "undo", "mod+shift+z": "redo" };
+  window.addEventListener("keydown", (event) => {
+    // Editors that handle a key themselves (undo in the composer) prevent its default first.
+    if (!event.isTrusted || event.defaultPrevented) return;
+    const command = EDITING[chord(event)];
+    if (command && document.execCommand(command)) event.preventDefault();
+  });
+
+  // The clipboard API is refused to this frame inside the editor; copy buttons then write through
+  // the editor's clipboard, which is the user's local one even over Remote-SSH.
+  const clipboard = navigator.clipboard;
+  if (clipboard && trustedParent) {
+    const nativeWriteText = typeof clipboard.writeText === "function" ? clipboard.writeText.bind(clipboard) : undefined;
+    const nativeWrite = typeof clipboard.write === "function" ? clipboard.write.bind(clipboard) : undefined;
+    const viaEditor = (text) => post({ type: "copyText", text: String(text).slice(0, 4000000) });
+    clipboard.writeText = function (text) {
+      return (nativeWriteText ? nativeWriteText(text) : Promise.reject(new Error("unavailable"))).catch(() => viaEditor(text));
+    };
+    clipboard.write = function (items) {
+      return (nativeWrite ? nativeWrite(items) : Promise.reject(new Error("unavailable"))).catch(async (error) => {
+        for (const item of items || []) {
+          if (item.types.includes("text/plain")) return viaEditor(await (await item.getType("text/plain")).text());
+        }
+        throw error;
+      });
+    };
+  }
+
+  // A middle click on a thread in T3 Code's list opens it in its own editor tab, like a browser tab.
+  window.addEventListener(
+    "auxclick",
+    (event) => {
+      if (event.button !== 1) return;
+      const row = event.target instanceof Element ? event.target.closest("[data-thread-item]") : null;
+      const key = row && row.getAttribute("data-thread-item");
+      const split = key ? key.indexOf(":") : -1;
+      if (split <= 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      post({ type: "openThreadInTab", environmentId: key.slice(0, split), threadId: key.slice(split + 1) });
+    },
+    true,
+  );
+
   // Errors in the chat page go to the editor's log, so a blank or broken tab can be diagnosed.
   let reportedErrors = 0;
   function reportError(message, detail) {
@@ -287,11 +354,27 @@
     });
   }
 
+  // Typing needs the frame to have focus, which arrives just after the editor reveals the chat.
+  function whenFocused(run) {
+    if (document.hasFocus()) return run();
+    let done = false;
+    const go = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("focus", go);
+      run();
+    };
+    window.addEventListener("focus", go);
+    setTimeout(go, 800);
+  }
+
   function insertText(text) {
-    whenComposer((editor) => {
-      editor.focus();
-      document.execCommand("insertText", false, text);
-    });
+    whenComposer((editor) =>
+      whenFocused(() => {
+        editor.focus();
+        document.execCommand("insertText", false, text);
+      }),
+    );
   }
 
   // Runs one of T3 Code's own shortcuts (for example `mod+n` for chat.new) inside the app.
@@ -432,6 +515,7 @@
   });
 
   window.addEventListener("focus", () => post({ type: "focus" }));
+  window.addEventListener("blur", () => post({ type: "blur" }));
   document.addEventListener("DOMContentLoaded", () => {
     reportRoute();
     post({ type: "ready" });

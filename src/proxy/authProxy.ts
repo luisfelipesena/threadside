@@ -28,6 +28,8 @@ export class AuthProxy {
   private target: ConnectionTarget | undefined;
   private readonly allowedOrigins = new Set<string>();
   private readonly bridgeSource: string;
+  /** Read by the bridge before T3 Code's app starts; asked for on each page load. */
+  boot: () => { projectScopeKeys?: string[] } = () => ({});
 
   constructor(bridgeFile: string) {
     this.bridgeSource = readFileSync(bridgeFile, "utf8");
@@ -132,7 +134,8 @@ export class AuthProxy {
     if (!this.hasKey(req) || !this.fromWebview(req, false)) return deny(res);
     if (url.pathname === BRIDGE_PATH) {
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
-      res.end(this.bridgeSource);
+      // Settings the page needs before T3 Code's app starts, such as this window's project filter.
+      res.end(`self.__threadsideBoot = ${JSON.stringify(this.boot())};\n${this.bridgeSource}`);
       return;
     }
     const target = this.target;

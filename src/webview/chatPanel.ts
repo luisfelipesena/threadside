@@ -6,7 +6,8 @@ import type { AuthProxy } from "../proxy/authProxy";
 import { threadIdFromPath } from "../routes";
 
 export const VIEW_TYPE = "threadside.chat";
-
+/** The chat docked in a side bar (the Secondary Side Bar by default), like Cursor's chat pane. */
+export const SIDE_VIEW_ID = "threadside.chatView";
 
 interface PanelState {
   path?: string;
@@ -31,10 +32,14 @@ export interface ChatHost {
   onPanelChanged(): void;
 }
 
-/** One chat tab: an editor-area webview that hosts T3 Code's own UI from the auth proxy. */
+/**
+ * One chat: an editor tab or the docked side view, each a webview that hosts T3 Code's own UI from
+ * the auth proxy.
+ */
 export class ChatPanel {
   path: string;
-  title = "T3";
+  /** Whether keyboard focus is inside the chat (the page reports focus and blur). */
+  private focused = false;
   /** Runs once, when the chat UI first reports it is ready. */
   onFirstReady: (() => void) | undefined;
   private readonly disposables: vscode.Disposable[] = [];
@@ -42,26 +47,54 @@ export class ChatPanel {
   readonly onDidDispose = this.disposeEmitter.event;
 
   constructor(
-    readonly panel: vscode.WebviewPanel,
+    private readonly surface: vscode.WebviewPanel | vscode.WebviewView,
     private readonly host: ChatHost,
     state: PanelState | undefined,
   ) {
     this.path = state?.path ?? "/";
-    panel.iconPath = {
-      light: vscode.Uri.joinPath(extensionUri(), "media", "chat-light.svg"),
-      dark: vscode.Uri.joinPath(extensionUri(), "media", "chat-dark.svg"),
-    };
-    panel.webview.options = { enableScripts: true, localResourceRoots: [] };
+    if (this.panel) {
+      this.panel.iconPath = {
+        light: vscode.Uri.joinPath(extensionUri(), "media", "chat-light.svg"),
+        dark: vscode.Uri.joinPath(extensionUri(), "media", "chat-dark.svg"),
+      };
+    }
+    surface.webview.options = { enableScripts: true, localResourceRoots: [] };
     this.disposables.push(
-      panel.webview.onDidReceiveMessage((message: BridgeMessage) => this.receive(message)),
-      panel.onDidChangeViewState(() => host.onPanelChanged()),
-      panel.onDidDispose(() => this.dispose()),
+      surface.webview.onDidReceiveMessage((message: BridgeMessage) => this.receive(message)),
+      this.panel ? this.panel.onDidChangeViewState(() => host.onPanelChanged()) : (surface as vscode.WebviewView).onDidChangeVisibility(() => host.onPanelChanged()),
+      surface.onDidDispose(() => this.dispose()),
       vscode.window.onDidChangeActiveColorTheme(() => this.postTheme()),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("threadside")) this.postConfig();
       }),
     );
     void this.render();
+  }
+
+  /** The editor tab, or undefined for the docked side view. */
+  get panel(): vscode.WebviewPanel | undefined {
+    return "reveal" in this.surface ? this.surface : undefined;
+  }
+
+  get isSideView(): boolean {
+    return !this.panel;
+  }
+
+  /** The chat has focus: the active editor tab, or the side view with focus inside it. */
+  get active(): boolean {
+    return this.panel ? this.panel.active : this.surface.visible && this.focused;
+  }
+
+  get visible(): boolean {
+    return this.surface.visible;
+  }
+
+  setTitle(title: string): void {
+    if (this.panel) {
+      if (this.panel.title !== title) this.panel.title = title;
+    } else if ((this.surface as vscode.WebviewView).description !== title) {
+      (this.surface as vscode.WebviewView).description = title;
+    }
   }
 
   get threadId(): string | undefined {
@@ -73,11 +106,15 @@ export class ChatPanel {
 
   async render(httpBaseUrl?: string): Promise<void> {
     this.renderedFor = httpBaseUrl ?? (this.host.environment.status.kind === "connected" ? this.host.environment.status.httpBaseUrl : undefined);
-    const origin = await this.host.proxyOrigin();
-    const theme = themeKind();
-    const src = this.host.proxy.entryUrl(origin, this.path, theme);
     const nonce = randomBytes(16).toString("base64");
-    this.panel.webview.html = hostHtml(src, new URL(origin).origin, nonce, this.panel.webview.cspSource);
+    const webview = this.surface.webview;
+    if (!this.renderedFor) {
+      webview.html = hostHtml(undefined, "", nonce, webview.cspSource);
+      return;
+    }
+    const origin = await this.host.proxyOrigin();
+    const src = this.host.proxy.entryUrl(origin, this.path, themeKind());
+    webview.html = hostHtml(src, new URL(origin).origin, nonce, webview.cspSource);
   }
 
   navigate(path: string): void {
@@ -98,11 +135,12 @@ export class ChatPanel {
   }
 
   reveal(preserveFocus = false): void {
-    this.panel.reveal(undefined, preserveFocus);
+    if (this.panel) this.panel.reveal(undefined, preserveFocus);
+    else (this.surface as vscode.WebviewView).show(preserveFocus);
   }
 
   post(message: Record<string, unknown>): void {
-    void this.panel.webview.postMessage({ source: "threadside-host", ...message });
+    void this.surface.webview.postMessage({ source: "threadside-host", ...message });
   }
 
   private postConfig(): void {
@@ -153,6 +191,15 @@ export class ChatPanel {
       case "showLog":
         log().show();
         break;
+      case "connect":
+        void vscode.commands.executeCommand("threadside.connect");
+        break;
+      case "focus":
+        this.focused = true;
+        break;
+      case "blur":
+        this.focused = false;
+        break;
       default:
         break;
     }
@@ -185,10 +232,10 @@ function extensionUri(): vscode.Uri {
  * the extension; messages from the extension go to the frame. A watchdog replaces a blank tab with a
  * clear error, a Reload button and the log.
  */
-function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: string): string {
+function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, cspSource: string): string {
   const csp = [
     "default-src 'none'",
-    `frame-src ${frameOrigin}`,
+    ...(src ? [`frame-src ${frameOrigin}`] : []),
     `script-src 'nonce-${nonce}'`,
     `style-src 'unsafe-inline' ${cspSource}`,
   ].join("; ");
@@ -213,8 +260,16 @@ function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: st
 </style>
 </head>
 <body>
-<iframe id="chat" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen; display-capture" allowfullscreen></iframe>
-<div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>
+${
+  src
+    ? `<iframe id="chat" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen; display-capture" allowfullscreen></iframe>
+<div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>`
+    : `<div id="offline" class="notice"><div>
+  <p><strong>T3 Code is not connected</strong></p>
+  <p class="muted">Use the T3 Code server on this machine, or pair with one on another.</p>
+  <div class="actions"><button id="connect" class="primary">Connect…</button><button id="offline-log">Show Log</button></div>
+</div></div>`
+}
 <div id="error" class="notice" hidden>
   <div>
     <p id="error-title">The chat did not load.</p>
@@ -226,6 +281,11 @@ function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: st
 (function () {
   const vscode = acquireVsCodeApi();
   const frame = document.getElementById("chat");
+  if (!frame) {
+    document.getElementById("connect").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "connect" }));
+    document.getElementById("offline-log").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
+    return;
+  }
   const origin = ${JSON.stringify(frameOrigin)};
   const errorBox = document.getElementById("error");
   let watchdog;
