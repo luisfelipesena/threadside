@@ -9,8 +9,12 @@
   const state = {
     editorKeys: [],
     openFilesInEditor: true,
-    theme: readCookie("threadside_theme") === "light" ? "light" : "dark",
+    theme: readCookie("threadside_theme_" + location.port) === "light" ? "light" : "dark",
   };
+  // The editor's webview that hosts this frame; nothing else may talk to the bridge.
+  const parentOrigin = (location.ancestorOrigins && location.ancestorOrigins[0]) || "";
+  const trustedParent = /^vscode-webview:\/\//.test(parentOrigin);
+  const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
   window.__threadside = { version: 1 };
 
   function readCookie(name) {
@@ -19,7 +23,7 @@
   }
 
   function post(message) {
-    if (window.parent !== window) window.parent.postMessage(Object.assign({ source: BRIDGE }, message), "*");
+    if (trustedParent && window.parent !== window) window.parent.postMessage(Object.assign({ source: BRIDGE }, message), parentOrigin);
   }
 
   // Theme: answer `(prefers-color-scheme: …)` with the editor's theme so T3 Code's "System"
@@ -130,9 +134,11 @@
 
   // Keys: T3 Code handles its own shortcuts first. Keys it leaves alone, and the editor's
   // reserved shortcuts, go to the editor so Cmd+P, Cmd+Shift+P and friends keep working.
+  // `mod` is ⌘ on macOS and Ctrl elsewhere; on macOS Ctrl stays `ctrl` (Ctrl+N is "next line" there).
   function chord(event) {
     const parts = [];
-    if (event.metaKey || event.ctrlKey) parts.push("mod");
+    if (isMac ? event.metaKey : event.ctrlKey) parts.push("mod");
+    if (isMac && event.ctrlKey) parts.push("ctrl");
     if (event.altKey) parts.push("alt");
     if (event.shiftKey) parts.push("shift");
     parts.push(event.key.length === 1 ? event.key.toLowerCase() : event.key.toLowerCase());
@@ -361,7 +367,7 @@
   }
 
   window.addEventListener("message", (event) => {
-    if (event.source !== window.parent) return;
+    if (!trustedParent || event.source !== window.parent || event.origin !== parentOrigin) return;
     const message = event.data;
     if (!message || message.source !== HOST) return;
     switch (message.type) {

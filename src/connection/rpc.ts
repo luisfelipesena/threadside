@@ -27,6 +27,7 @@ export class RpcClient {
   private readonly pending = new Map<string, Pending>();
   private pingTimer: ReturnType<typeof setInterval> | undefined;
   private closedByUser = false;
+  private lastPong = 0;
 
   constructor(
     private readonly httpBaseUrl: string,
@@ -57,14 +58,31 @@ export class RpcClient {
       const socket = new WebSocket(url);
       this.socket = socket;
       let opened = false;
+      const openTimeout = setTimeout(() => {
+        if (opened) return;
+        socket.close();
+        reject(new Error("Timed out opening the T3 Code connection."));
+      }, 10_000);
       socket.onopen = () => {
         opened = true;
-        this.pingTimer = setInterval(() => this.send({ _tag: "Ping" }), 20_000);
+        clearTimeout(openTimeout);
+        this.lastPong = Date.now();
+        // A socket that stops answering pings is dead even if the OS has not noticed yet.
+        this.pingTimer = setInterval(() => {
+          if (Date.now() - this.lastPong > 50_000) {
+            socket.close(4000, "no pong");
+            return;
+          }
+          this.send({ _tag: "Ping" });
+        }, 20_000);
         this.onState("open");
         resolve();
       };
       socket.onerror = () => {
-        if (!opened) reject(new Error(`WebSocket to ${redact(url.toString())} failed.`));
+        if (!opened) {
+          clearTimeout(openTimeout);
+          reject(new Error(`WebSocket to ${redact(url.toString())} failed.`));
+        }
       };
       socket.onclose = (event) => {
         clearInterval(this.pingTimer);
@@ -120,6 +138,7 @@ export class RpcClient {
     } catch {
       return;
     }
+    this.lastPong = Date.now();
     const pending = message.requestId === undefined ? undefined : this.pending.get(message.requestId);
     switch (message._tag) {
       case "Chunk":

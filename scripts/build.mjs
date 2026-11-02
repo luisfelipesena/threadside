@@ -12,6 +12,8 @@ const extension = await esbuild.context({
   format: "cjs",
   target: "node20",
   external: ["vscode"],
+  // jsonc-parser's UMD entry requires its parts at runtime; its ESM entry bundles cleanly.
+  mainFields: ["module", "main"],
   outfile: "dist/extension.js",
   sourcemap: production ? false : "linked",
   minify: production,

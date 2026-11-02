@@ -1,4 +1,5 @@
-import { isAbsolute, normalize, resolve } from "node:path";
+import { isAbsolute, normalize, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface FileTarget {
   path: string;
@@ -18,7 +19,7 @@ export function parseFileHref(href: string, baseDir: string | undefined, home: s
   if (/^file:\/\//i.test(value)) {
     try {
       const url = new URL(value);
-      value = decodeURIComponent(url.pathname) + url.hash;
+      value = fileURLToPath(url.href.replace(/#.*$/, "")) + url.hash;
     } catch {
       return undefined;
     }
@@ -70,4 +71,10 @@ export function mentionFor(path: string, startLine?: number, endLine?: number): 
   const label = basename.replace(/([\\[\]])/g, "\\$1");
   const destination = target.replace(/[\s()<>%]/g, (char) => encodeURIComponent(char));
   return `[${label}](${destination})`;
+}
+
+/** Whether `child` is `parent` or inside it, on any platform. */
+export function isInside(parent: string, child: string): boolean {
+  const rel = relative(parent, child);
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
 }

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 /** The environment descriptor every T3 Code server publishes at `/.well-known/t3/environment`. */
 export interface EnvironmentDescriptor {
@@ -68,10 +68,11 @@ export async function fetchDescriptor(httpBaseUrl: string, timeoutMs = 4000): Pr
 
 /** The `t3` CLI the desktop app installs, then any `t3` on PATH. */
 export function findCli(t3Home: string): string | undefined {
-  const candidates = [process.env.T3CODE_CLI_PATH, join(t3Home, "bin", "t3")];
+  const names = process.platform === "win32" ? ["t3.cmd", "t3.exe", "t3.ps1"] : ["t3"];
+  const candidates = [process.env.T3CODE_CLI_PATH, ...names.map((name) => join(t3Home, "bin", name))];
   for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
-  for (const dir of (process.env.PATH ?? "").split(":")) {
-    if (dir && existsSync(join(dir, "t3"))) return join(dir, "t3");
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    for (const name of names) if (dir && existsSync(join(dir, name))) return join(dir, name);
   }
   return undefined;
 }

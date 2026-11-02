@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { isInside } from "../native/fileLinks";
 
 /** The subset of T3 Code's `OrchestrationV2ThreadShell` that Threadside reads. Unknown fields pass through. */
 export interface ThreadShell {
@@ -121,8 +122,7 @@ export class ShellStore {
   /** The project of `path`: a thread worktree that contains it, else the deepest project root. */
   projectForPath(path: string): ProjectShell | undefined {
     for (const thread of this.threads.values()) {
-      const root = thread.worktreePath?.replace(/\/+$/, "");
-      if (root && (path === root || path.startsWith(`${root}/`))) {
+      if (thread.worktreePath && isInside(thread.worktreePath, path)) {
         const project = this.projects.get(thread.projectId);
         if (project) return project;
       }
@@ -133,11 +133,8 @@ export class ShellStore {
   private projectForRoot(path: string): ProjectShell | undefined {
     let best: ProjectShell | undefined;
     for (const project of this.projects.values()) {
-      if (project.archivedAt) continue;
-      const root = project.workspaceRoot.replace(/\/+$/, "");
-      if ((path === root || path.startsWith(`${root}/`)) && (!best || root.length > best.workspaceRoot.length)) {
-        best = project;
-      }
+      if (project.archivedAt || !isInside(project.workspaceRoot, path)) continue;
+      if (!best || project.workspaceRoot.length > best.workspaceRoot.length) best = project;
     }
     return best;
   }

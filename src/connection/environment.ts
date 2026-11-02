@@ -23,24 +23,41 @@ interface StoredCredential {
   source: "local-cli" | "pairing";
 }
 
+/** Where the proxy and RPC send requests, with the token issued for exactly that server. */
+export interface ConnectionTarget {
+  httpBaseUrl: string;
+  bearer: () => Promise<string>;
+}
+
 export type ConnectionStatus =
   | { kind: "idle" }
   | { kind: "connecting" }
-  | { kind: "connected"; descriptor: EnvironmentDescriptor; httpBaseUrl: string }
+  | { kind: "connected"; descriptor: EnvironmentDescriptor; httpBaseUrl: string; target: ConnectionTarget }
   | { kind: "needs-pairing"; reason: string }
   | { kind: "error"; message: string };
 
 const SECRET_PREFIX = "threadside.credential.";
 const RENEW_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
+const MAX_REJECTED = 3;
+
+/**
+ * Credentials are keyed by environment id and server origin. The id alone comes from an
+ * unauthenticated endpoint, so another server could claim it; the origin pins a token to the server
+ * that issued it.
+ */
+function secretKey(environmentId: string, httpBaseUrl: string): string {
+  return `${SECRET_PREFIX}${environmentId}@${new URL(httpBaseUrl).origin}`;
+}
 
 /** Owns the credential, the RPC socket and the shell mirror for one T3 Code environment. */
 export class Environment implements vscode.Disposable {
   readonly shell = new ShellStore();
   private rpc: RpcClient | undefined;
-  private credential: StoredCredential | undefined;
+  private credential: (StoredCredential & { key: string }) | undefined;
   private retryTimer: ReturnType<typeof setTimeout> | undefined;
   private retryDelay = 1000;
   private generation = 0;
+  private rejected = 0;
   private readonly statusEmitter = new vscode.EventEmitter<ConnectionStatus>();
   readonly onDidChangeStatus = this.statusEmitter.event;
   status: ConnectionStatus = { kind: "idle" };
@@ -51,24 +68,16 @@ export class Environment implements vscode.Disposable {
     return this.status.kind === "connected" ? this.status.descriptor : undefined;
   }
 
-  get httpBaseUrl(): string | undefined {
-    return this.status.kind === "connected" ? this.status.httpBaseUrl : undefined;
-  }
-
-  /** The bearer token for the proxy and RPC; never logged or sent to the webview. */
-  async bearer(): Promise<string> {
-    if (!this.credential) throw new Error("Not connected to T3 Code.");
-    return this.credential.token;
-  }
-
   async connect(): Promise<void> {
     const generation = ++this.generation;
+    const stale = () => generation !== this.generation;
     clearTimeout(this.retryTimer);
     this.rpc?.close();
     this.rpc = undefined;
     this.setStatus({ kind: "connecting" });
+    let credential: (StoredCredential & { key: string }) | undefined;
     try {
-      const target = await this.resolveTarget();
+      const target = this.resolveTarget();
       if (!target) {
         this.setStatus({
           kind: "needs-pairing",
@@ -77,24 +86,30 @@ export class Environment implements vscode.Disposable {
         return;
       }
       const descriptor = await fetchDescriptor(target.httpBaseUrl);
+      if (stale()) return;
       if (descriptor.orchestrationProtocolVersion !== SUPPORTED_PROTOCOL) {
         throw new Error(
           `This T3 Code server speaks orchestration protocol ${descriptor.orchestrationProtocolVersion}; Threadside supports ${SUPPORTED_PROTOCOL}. Update ${descriptor.orchestrationProtocolVersion > SUPPORTED_PROTOCOL ? "Threadside" : "T3 Code"}.`,
         );
       }
-      this.credential = await this.loadCredential(descriptor, target);
-      if (!this.credential) {
+      credential = await this.loadCredential(descriptor, target);
+      if (stale()) return;
+      if (!credential) {
         this.setStatus({ kind: "needs-pairing", reason: `Pair this editor with ${descriptor.label} to continue.` });
         return;
       }
-      await this.openRpc(generation, target.httpBaseUrl, descriptor);
+      this.credential = credential;
+      await this.openRpc(generation, credential, descriptor);
     } catch (error) {
-      if (generation !== this.generation) return;
-      if (error instanceof UnauthorizedError && this.credential) {
-        log().warn("Saved T3 Code credential was rejected; issuing a new one.");
-        const environmentId = (this.descriptor ?? (await fetchDescriptor(this.credential.httpBaseUrl).catch(() => undefined)))?.environmentId;
-        if (environmentId) await this.secrets.delete(SECRET_PREFIX + environmentId);
-        this.credential = undefined;
+      if (stale()) return;
+      if (error instanceof UnauthorizedError && credential) {
+        await this.dropRejected(credential);
+        if (stale()) return;
+        if (++this.rejected >= MAX_REJECTED) {
+          this.setStatus({ kind: "error", message: "T3 Code keeps rejecting this editor's session. Run “T3: Connect to T3 Code…”." });
+          return;
+        }
+        log().warn("Saved T3 Code credential was rejected; getting a new one.");
         this.scheduleRetry(generation, 500);
         return;
       }
@@ -134,21 +149,20 @@ export class Environment implements vscode.Disposable {
       httpBaseUrl,
       source: "pairing",
     };
-    await this.secrets.store(SECRET_PREFIX + descriptor.environmentId, JSON.stringify(credential));
+    await this.secrets.store(secretKey(descriptor.environmentId, httpBaseUrl), JSON.stringify(credential));
     await vscode.workspace.getConfiguration("threadside").update("serverUrl", httpBaseUrl, vscode.ConfigurationTarget.Global);
+    this.rejected = 0;
     await this.connect();
   }
 
   /** Forgets this editor's credential and revokes the session when the local CLI can. */
   async forget(): Promise<void> {
-    const descriptor = this.descriptor;
     const credential = this.credential;
     this.disconnect();
-    if (descriptor) await this.secrets.delete(SECRET_PREFIX + descriptor.environmentId);
-    if (credential?.sessionId && credential.source === "local-cli") {
-      const t3Home = resolveT3Home(config().get("t3Home", ""));
-      const cli = findCli(t3Home);
-      if (cli) await revokeLocalSession(cli, t3Home, credential.sessionId);
+    this.credential = undefined;
+    if (credential) {
+      await this.secrets.delete(credential.key);
+      await this.revoke(credential);
     }
     this.shell.clear();
     this.setStatus({ kind: "needs-pairing", reason: "Disconnected. Connect again to use T3 Code here." });
@@ -171,9 +185,9 @@ export class Environment implements vscode.Disposable {
     return this.call("orchestration.dispatchCommand", { commandId: crypto.randomUUID(), ...command });
   }
 
-  private async resolveTarget(): Promise<{ httpBaseUrl: string; local: boolean } | undefined> {
+  private resolveTarget(): { httpBaseUrl: string; local: boolean } | undefined {
     const configured = config().get<string>("serverUrl", "").trim();
-    if (configured) return { httpBaseUrl: configured.replace(/\/+$/, ""), local: false };
+    if (configured) return { httpBaseUrl: new URL(configured).origin, local: false };
     const local = findLocalServer(resolveT3Home(config().get("t3Home", "")));
     return local ? { httpBaseUrl: local.httpBaseUrl, local: true } : undefined;
   }
@@ -181,19 +195,22 @@ export class Environment implements vscode.Disposable {
   private async loadCredential(
     descriptor: EnvironmentDescriptor,
     target: { httpBaseUrl: string; local: boolean },
-  ): Promise<StoredCredential | undefined> {
-    const key = SECRET_PREFIX + descriptor.environmentId;
+  ): Promise<(StoredCredential & { key: string }) | undefined> {
+    const key = secretKey(descriptor.environmentId, target.httpBaseUrl);
     const raw = await this.secrets.get(key);
     let stored = raw ? (JSON.parse(raw) as StoredCredential) : undefined;
+    // Never send a token to an origin other than the one it was issued for.
+    if (stored && new URL(stored.httpBaseUrl).origin !== new URL(target.httpBaseUrl).origin) stored = undefined;
     const renewable = target.local && (!stored || stored.source === "local-cli");
     const expiring = stored?.expiresAt !== undefined && stored.expiresAt - Date.now() < RENEW_BEFORE_MS;
     if (renewable && (!stored || expiring)) {
       const t3Home = resolveT3Home(config().get("t3Home", ""));
       const cli = findCli(t3Home);
       if (!cli) {
-        if (stored) return { ...stored, httpBaseUrl: target.httpBaseUrl };
+        if (stored) return { ...stored, key };
         throw new Error("Found a running T3 Code server but not its `t3` command. Open T3 Code once, or pair with a link.");
       }
+      const previous = stored;
       const issued = await issueLocalSession(cli, t3Home, clientLabel());
       stored = {
         token: issued.token,
@@ -203,18 +220,37 @@ export class Environment implements vscode.Disposable {
         source: "local-cli",
       };
       await this.secrets.store(key, JSON.stringify(stored));
+      if (previous) await this.revoke(previous);
       log().info(`Issued a T3 Code session for ${descriptor.label}.`);
     }
-    if (stored) stored.httpBaseUrl = target.httpBaseUrl;
-    return stored;
+    return stored ? { ...stored, key } : undefined;
   }
 
-  private async openRpc(generation: number, httpBaseUrl: string, descriptor: EnvironmentDescriptor): Promise<void> {
-    const rpc = new RpcClient(httpBaseUrl, () => this.bearer(), (state, reason) => {
-      if (generation !== this.generation || state !== "closed") return;
-      log().warn(`T3 Code connection closed (${reason}); reconnecting.`);
+  private async dropRejected(credential: StoredCredential & { key: string }): Promise<void> {
+    await this.secrets.delete(credential.key);
+    await this.revoke(credential);
+    if (this.credential?.key === credential.key) this.credential = undefined;
+  }
+
+  private async revoke(credential: StoredCredential): Promise<void> {
+    if (credential.source !== "local-cli" || !credential.sessionId) return;
+    const t3Home = resolveT3Home(config().get("t3Home", ""));
+    const cli = findCli(t3Home);
+    if (cli) await revokeLocalSession(cli, t3Home, credential.sessionId);
+  }
+
+  private async openRpc(generation: number, credential: StoredCredential, descriptor: EnvironmentDescriptor): Promise<void> {
+    const token = credential.token;
+    const target: ConnectionTarget = { httpBaseUrl: credential.httpBaseUrl, bearer: async () => token };
+    const reconnect = (reason: string) => {
+      if (generation !== this.generation) return;
+      log().warn(`T3 Code connection lost (${reason}); reconnecting.`);
+      this.rpc?.close();
       this.setStatus({ kind: "connecting" });
       this.scheduleRetry(generation);
+    };
+    const rpc = new RpcClient(target.httpBaseUrl, target.bearer, (state, reason) => {
+      if (state === "closed") reconnect(reason ?? "closed");
     });
     await rpc.connect();
     if (generation !== this.generation) {
@@ -223,9 +259,14 @@ export class Environment implements vscode.Disposable {
     }
     this.rpc = rpc;
     this.retryDelay = 1000;
+    this.rejected = 0;
     const stream = rpc.stream("orchestration.subscribeShell", {}, (values) => this.shell.apply(values));
-    stream.done.catch((error: Error) => log().warn(`Shell stream ended: ${error.message}`));
-    this.setStatus({ kind: "connected", descriptor, httpBaseUrl });
+    // The thread list must not freeze while the socket stays open: a finished stream reconnects.
+    stream.done.then(
+      () => reconnect("thread stream ended"),
+      (error: Error) => reconnect(error.message),
+    );
+    this.setStatus({ kind: "connected", descriptor, httpBaseUrl: target.httpBaseUrl, target });
     log().info(`Connected to ${descriptor.label} (T3 Code ${descriptor.serverVersion}).`);
   }
 

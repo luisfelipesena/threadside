@@ -21,8 +21,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      - run: npm test
       - run: npm run build -- --production
+      - run: npm test
       - run: npx vsce package --no-dependencies -o threadside.vsix
       - name: Scan for secrets
         uses: gitleaks/gitleaks-action@v2

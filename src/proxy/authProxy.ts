@@ -3,43 +3,63 @@ import { readFileSync } from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
 import type { AddressInfo, Socket } from "node:net";
+import type { ConnectionTarget } from "../connection/environment";
 import { log, redact } from "../log";
 import { BRIDGE_PATH, injectBridge, upstreamUrl } from "./upstream";
 
-const KEY_COOKIE = "threadside_key";
 const KEY_PARAM = "threadside_key";
 const THEME_PARAM = "threadside_theme";
-
-export interface ProxyTarget {
-  httpBaseUrl: string;
-  bearer: () => Promise<string>;
-}
+/** Only the editor may frame the chat: its workbench and webview origins. */
+const FRAME_ANCESTORS = "frame-ancestors 'self' vscode-webview: vscode-file:";
 
 /**
  * Serves the connected T3 Code server's own web build on loopback and adds the bearer token on the
  * way out, so the chat UI is always the exact version the server ships. The webview loads this
- * origin in an iframe. Each window gets a random key; requests without it are refused, so other
- * local processes cannot ride the forwarded port.
+ * origin in an iframe.
+ *
+ * Who may use it: each window has a random key, set once as an HttpOnly cookie named after the
+ * port (so two windows never overwrite each other); requests that carry an Origin must come from
+ * the webview's own origin; cross-site requests other than the frame's own navigation are refused.
  */
 export class AuthProxy {
   private server: http.Server | undefined;
+  private port = 0;
   private readonly key = randomBytes(24).toString("base64url");
-  private target: ProxyTarget | undefined;
-  private bridgeSource: string;
+  private target: ConnectionTarget | undefined;
+  private readonly allowedOrigins = new Set<string>();
+  private readonly bridgeSource: string;
 
   constructor(bridgeFile: string) {
     this.bridgeSource = readFileSync(bridgeFile, "utf8");
   }
 
-  setTarget(target: ProxyTarget | undefined): void {
+  setTarget(target: ConnectionTarget | undefined): void {
     this.target = target;
+  }
+
+  /** The origin the webview reaches this proxy at (loopback, or the editor's forwarded port). */
+  allowOrigin(origin: string): void {
+    this.allowedOrigins.add(origin);
+  }
+
+  private get keyCookie(): string {
+    return `threadside_key_${this.port}`;
   }
 
   /** Starts on the preferred port when free, so the iframe origin (and its saved UI state) is stable. */
   async start(preferredPort: number | undefined): Promise<number> {
-    if (this.server) return (this.server.address() as AddressInfo).port;
-    const server = http.createServer((req, res) => void this.handle(req, res));
-    server.on("upgrade", (req, socket, head) => void this.upgrade(req, socket as Socket, head));
+    if (this.server) return this.port;
+    const server = http.createServer((req, res) => {
+      this.handle(req, res).catch((error: Error) => {
+        log().warn(`Proxy request failed: ${redact(error.message)}`);
+        if (!res.headersSent) res.writeHead(503, { "content-type": "text/plain" });
+        res.end("Threadside could not reach T3 Code.");
+      });
+    });
+    server.on("upgrade", (req, socket: Socket, head) => {
+      socket.on("error", () => socket.destroy());
+      this.upgrade(req, socket, head).catch(() => socket.destroy());
+    });
     server.keepAliveTimeout = 30_000;
     const listen = (port: number) =>
       new Promise<number>((resolve, reject) => {
@@ -49,17 +69,16 @@ export class AuthProxy {
           resolve((server.address() as AddressInfo).port);
         });
       });
-    let port: number;
     try {
-      port = await listen(preferredPort ?? 0);
+      this.port = await listen(preferredPort ?? 0);
     } catch {
-      port = await listen(0);
+      this.port = await listen(0);
     }
     this.server = server;
-    return port;
+    return this.port;
   }
 
-  /** The entry URL; its one-time parameter sets the key cookie and is stripped by a redirect. */
+  /** The entry URL; its one-time parameters set the key and theme cookies and are stripped by a redirect. */
   entryUrl(origin: string, path = "/", theme: "light" | "dark" = "dark"): string {
     const url = new URL(path, origin);
     url.searchParams.set(KEY_PARAM, this.key);
@@ -73,32 +92,44 @@ export class AuthProxy {
     this.server = undefined;
   }
 
-  private authorized(req: http.IncomingMessage): boolean {
-    const cookie = parseCookies(req.headers.cookie)[KEY_COOKIE];
+  private hasKey(req: http.IncomingMessage): boolean {
+    const cookie = parseCookies(req.headers.cookie)[this.keyCookie];
     return cookie !== undefined && safeEqual(cookie, this.key);
+  }
+
+  /** Origin, when present, must be the webview's; without one, only the frame's own navigation may be cross-site. */
+  private fromWebview(req: http.IncomingMessage, upgrade: boolean): boolean {
+    const origin = req.headers.origin;
+    if (origin !== undefined) return this.allowedOrigins.has(origin);
+    if (upgrade) return false;
+    const site = req.headers["sec-fetch-site"];
+    if (site === "cross-site" || site === "same-site") {
+      return req.headers["sec-fetch-mode"] === "navigate" && req.headers["sec-fetch-dest"] === "iframe";
+    }
+    return true;
   }
 
   private async handle(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
     const url = new URL(req.url ?? "/", "http://proxy.invalid");
     const presented = url.searchParams.get(KEY_PARAM);
     if (presented !== null) {
-      if (!safeEqual(presented, this.key)) return deny(res);
+      if (!safeEqual(presented, this.key) || !this.fromWebview(req, false)) return deny(res);
       const theme = url.searchParams.get(THEME_PARAM) === "light" ? "light" : "dark";
       url.searchParams.delete(KEY_PARAM);
       url.searchParams.delete(THEME_PARAM);
       res.writeHead(302, {
         location: url.pathname + url.search + url.hash,
         "set-cookie": [
-          `${KEY_COOKIE}=${this.key}; Path=/; HttpOnly; SameSite=None; Secure`,
+          `${this.keyCookie}=${this.key}; Path=/; HttpOnly; SameSite=None; Secure`,
           // Read by the bridge before the app starts, so the first paint already matches the editor.
-          `${THEME_PARAM}=${theme}; Path=/; SameSite=None; Secure`,
+          `${THEME_PARAM}_${this.port}=${theme}; Path=/; SameSite=None; Secure`,
         ],
         "cache-control": "no-store",
       });
       res.end();
       return;
     }
-    if (!this.authorized(req)) return deny(res);
+    if (!this.hasKey(req) || !this.fromWebview(req, false)) return deny(res);
     if (url.pathname === BRIDGE_PATH) {
       res.writeHead(200, { "content-type": "text/javascript; charset=utf-8", "cache-control": "no-store" });
       res.end(this.bridgeSource);
@@ -106,7 +137,7 @@ export class AuthProxy {
     }
     const target = this.target;
     if (!target) {
-      res.writeHead(503, { "content-type": "text/plain" });
+      res.writeHead(503, { "content-type": "text/plain", "cache-control": "no-store" });
       res.end("Threadside is not connected to T3 Code yet.");
       return;
     }
@@ -127,6 +158,7 @@ export class AuthProxy {
           delete responseHeaders["content-length"];
           delete responseHeaders["content-encoding"];
           responseHeaders["cache-control"] = "no-store";
+          responseHeaders["content-security-policy"] = FRAME_ANCESTORS;
           res.writeHead(upstreamRes.statusCode ?? 200, responseHeaders);
           res.end(html);
         });
@@ -145,8 +177,8 @@ export class AuthProxy {
 
   private async upgrade(req: http.IncomingMessage, socket: Socket, head: Buffer): Promise<void> {
     const target = this.target;
-    if (!this.authorized(req) || !target) {
-      socket.end("HTTP/1.1 401 Unauthorized\r\n\r\n");
+    if (!this.hasKey(req) || !this.fromWebview(req, true) || !target) {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
       return;
     }
     const upstream = upstreamUrl(target.httpBaseUrl, new URL(req.url ?? "/", "http://proxy.invalid"));
@@ -167,7 +199,9 @@ export class AuthProxy {
         upstreamSocket.destroy();
       };
       socket.on("error", close);
+      socket.on("close", close);
       upstreamSocket.on("error", close);
+      upstreamSocket.on("close", close);
     });
     proxied.on("response", (upstreamRes) => {
       socket.end(`HTTP/1.1 ${upstreamRes.statusCode} ${upstreamRes.statusMessage}\r\n\r\n`);
@@ -178,7 +212,7 @@ export class AuthProxy {
 
   private async upstreamHeaders(
     req: http.IncomingMessage,
-    target: ProxyTarget,
+    target: ConnectionTarget,
     upstream: URL,
   ): Promise<http.OutgoingHttpHeaders> {
     const headers: http.OutgoingHttpHeaders = { ...req.headers };
@@ -186,8 +220,9 @@ export class AuthProxy {
     delete headers.authorization;
     delete headers.dpop;
     headers.host = upstream.host;
+    // Requests that reach this point come from the webview, so the server sees its own origin.
     if (headers.origin) headers.origin = upstream.origin;
-    if (headers.referer) headers.referer = upstream.origin + "/";
+    if (headers.referer) headers.referer = `${upstream.origin}/`;
     headers.authorization = `Bearer ${await target.bearer()}`;
     return headers;
   }

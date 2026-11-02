@@ -3,12 +3,12 @@ import { homedir } from "node:os";
 import { relative as relativePath } from "node:path";
 import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
-import { Environment } from "./connection/environment";
+import { Environment, parsePairingInput } from "./connection/environment";
 import { isRunning, limitResetAt, sectionOf, type ThreadShell } from "./connection/shell";
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
-import { mentionFor, parseFileHref } from "./native/fileLinks";
+import { isInside, mentionFor, parseFileHref } from "./native/fileLinks";
 import { reviewChanges } from "./native/review";
 import { relative, statusLabel, ThreadsTree } from "./native/threadsTree";
 import { AuthProxy } from "./proxy/authProxy";
@@ -66,8 +66,11 @@ class Controller implements vscode.Disposable {
       vscode.window.registerUriHandler({ handleUri: (uri) => this.handleUri(uri) }),
       this.environment.onDidChangeStatus((status) => {
         if (status.kind === "connected") {
-          this.proxy.setTarget({ httpBaseUrl: status.httpBaseUrl, bearer: () => this.environment.bearer() });
-          for (const panel of this.panels) void panel.render();
+          this.proxy.setTarget(status.target);
+          // Reload only tabs that show another server or the "not connected" page; a brief drop keeps the UI as it was.
+          for (const panel of this.panels) if (panel.renderedFor !== status.httpBaseUrl) void panel.render(status.httpBaseUrl);
+        } else if (status.kind === "needs-pairing") {
+          this.proxy.setTarget(undefined);
         }
         this.tree.refresh();
         this.updateStatus();
@@ -119,6 +122,7 @@ class Controller implements vscode.Disposable {
       await this.context.globalState.update(PORT_KEY, port);
       const external = await vscode.env.asExternalUri(vscode.Uri.parse(`http://127.0.0.1:${port}`));
       const origin = new URL(external.toString(true)).origin;
+      this.proxy.allowOrigin(origin);
       log().info(`Chat proxy on 127.0.0.1:${port}, reached as ${origin}.`);
       return origin;
     })();
@@ -285,9 +289,7 @@ class Controller implements vscode.Disposable {
     const thread = this.activeThread();
     const roots = [thread && this.threadDir(thread), ...(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)];
     for (const root of roots) {
-      if (!root) continue;
-      const rel = relativePath(root, path);
-      if (rel && !rel.startsWith("..") && !rel.startsWith("/")) return rel;
+      if (root && isInside(root, path) && root !== path) return relativePath(root, path).split("\\").join("/");
     }
     return path;
   }
@@ -568,8 +570,15 @@ class Controller implements vscode.Disposable {
     if (uri.path === "/pair") {
       const link = params.get("link") ?? params.get("url");
       if (!link) return;
-      // A link from a web page or chat must not silently point this editor at someone else's server.
-      const host = new URL(link.includes("://") ? link : `https://${link}`).host;
+      // A link from a web page or chat must not silently point this editor at someone else's server,
+      // so the dialog names the server the link would actually pair with.
+      let host: string;
+      try {
+        host = new URL(parsePairingInput(link).httpBaseUrl).host;
+      } catch (error) {
+        void vscode.window.showErrorMessage(`T3: ${error instanceof Error ? error.message : String(error)}`);
+        return;
+      }
       const ok = await vscode.window.showWarningMessage(
         `Pair this editor with the T3 Code server at ${host}?`,
         { modal: true, detail: "Only continue if you just created this pairing link on your own machine." },
@@ -589,13 +598,12 @@ class Controller implements vscode.Disposable {
   /** Projects that belong to this window's folders; undefined means every project. */
   private scopeProjects(): ReadonlySet<string> | undefined {
     if (this.scope === "all") return undefined;
-    const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath.replace(/\/+$/, ""));
+    const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
     if (!folders.length) return undefined;
     const ids = new Set<string>();
     for (const project of this.environment.shell.projects.values()) {
-      const root = project.workspaceRoot.replace(/\/+$/, "");
       // A folder that holds several projects (such as ~/Development) shows all of them.
-      if (folders.some((folder) => root.startsWith(`${folder}/`))) ids.add(project.id);
+      if (folders.some((folder) => isInside(folder, project.workspaceRoot))) ids.add(project.id);
     }
     // A project folder, a folder inside one, or a thread's worktree.
     for (const folder of folders) {

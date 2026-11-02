@@ -62,7 +62,11 @@ export class ChatPanel {
     return threadIdFromPath(this.path);
   }
 
-  async render(): Promise<void> {
+  /** The server this tab last loaded from; undefined while it showed the "not connected" page. */
+  renderedFor: string | undefined;
+
+  async render(httpBaseUrl?: string): Promise<void> {
+    this.renderedFor = httpBaseUrl ?? (this.host.environment.status.kind === "connected" ? this.host.environment.status.httpBaseUrl : undefined);
     const origin = await this.host.proxyOrigin();
     const theme = themeKind();
     const src = this.host.proxy.entryUrl(origin, this.path, theme);
@@ -229,7 +233,8 @@ function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: st
       vscode.postMessage(data);
       return;
     }
-    if (data.source === "threadside-host" && event.source !== frame.contentWindow) {
+    // Messages from the extension arrive from the webview shell (this window's parent, same origin).
+    if (data.source === "threadside-host" && event.source === window.parent && event.origin === window.origin) {
       if (data.type === "focusComposer" || data.type === "insert" || data.type === "mentions") frame.focus();
       if (data.type === "config") matchColors = data.matchEditorColors !== false;
       frame.contentWindow.postMessage(data, origin);
