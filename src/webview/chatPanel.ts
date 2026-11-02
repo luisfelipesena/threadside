@@ -12,6 +12,12 @@ interface PanelState {
   path?: string;
 }
 
+/** Shortcuts that run editor commands while the chat has focus, from `threadside.chatShortcuts`. */
+export function chatShortcuts(): Record<string, string> {
+  const map = vscode.workspace.getConfiguration("threadside").get<Record<string, string>>("chatShortcuts", {});
+  return Object.fromEntries(Object.entries(map).filter(([chord, command]) => chord && typeof command === "string" && command));
+}
+
 export interface BridgeMessage {
   type: string;
   [key: string]: unknown;
@@ -102,7 +108,8 @@ export class ChatPanel {
   private postConfig(): void {
     this.post({
       type: "config",
-      editorKeys: vscode.workspace.getConfiguration("threadside").get<string[]>("editorKeysInChat", []),
+      shortcuts: Object.keys(chatShortcuts()),
+      compactChat: vscode.workspace.getConfiguration("threadside").get("compactChat", true),
       openFilesInEditor: vscode.workspace.getConfiguration("threadside").get("openFileLinksInEditor", true),
       matchEditorColors: vscode.workspace.getConfiguration("threadside").get("matchEditorColors", true),
     });
@@ -128,8 +135,23 @@ export class ChatPanel {
           this.host.onPanelChanged();
         }
         break;
-      case "frameError":
-        log().warn(`Chat frame failed to load: ${String(message.detail ?? "")}`);
+      case "shortcut": {
+        // Only commands from the shortcut map run; the page cannot name a command itself.
+        const command = chatShortcuts()[String(message.chord)];
+        if (command) void vscode.commands.executeCommand(command);
+        break;
+      }
+      case "clientError":
+        log().error(`Chat page error on ${String(message.path)}: ${String(message.message)}${message.detail ? `\n${String(message.detail)}` : ""}`);
+        break;
+      case "frameProblem":
+        log().error(`Chat tab problem: ${String(message.title)} ${String(message.detail ?? "")} (page ${this.path})`);
+        break;
+      case "reload":
+        void this.render();
+        break;
+      case "showLog":
+        log().show();
         break;
       default:
         break;
@@ -159,9 +181,9 @@ function extensionUri(): vscode.Uri {
 }
 
 /**
- * The host page: a full-bleed iframe on the proxy origin plus a relay. Messages from the iframe go
- * to the extension; messages from the extension go to the iframe. Keys the chat leaves alone are
- * re-dispatched here so the editor's keybindings still run.
+ * The host page: a full-bleed iframe on the proxy origin plus a relay. Messages from the frame go to
+ * the extension; messages from the extension go to the frame. A watchdog replaces a blank tab with a
+ * clear error, a Reload button and the log.
  */
 function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: string): string {
   const csp = [
@@ -177,25 +199,66 @@ function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: st
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); color: var(--vscode-foreground); font: 13px/1.5 var(--vscode-font-family); }
   iframe { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; display: block; }
-  #status { position: fixed; inset: 0; display: grid; place-items: center; font: 13px var(--vscode-font-family); color: var(--vscode-descriptionForeground); pointer-events: none; transition: opacity .2s; }
-  body.loaded #status { opacity: 0; }
+  .notice { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--vscode-editor-background); }
+  .notice[hidden] { display: none; }
+  .notice p { margin: 0 0 4px; max-width: 420px; }
+  .notice .muted { color: var(--vscode-descriptionForeground); }
+  .notice .actions { margin-top: 14px; display: flex; gap: 8px; justify-content: center; }
+  .notice button { font: inherit; padding: 4px 12px; border-radius: 2px; border: 1px solid var(--vscode-button-border, transparent); cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+  .notice button.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  #loading { pointer-events: none; color: var(--vscode-descriptionForeground); transition: opacity .2s; }
+  body.ready #loading { opacity: 0; }
 </style>
 </head>
 <body>
-<div id="status">Connecting to T3 Code…</div>
 <iframe id="chat" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen; display-capture" allowfullscreen></iframe>
+<div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>
+<div id="error" class="notice" hidden>
+  <div>
+    <p id="error-title">The chat did not load.</p>
+    <p id="error-detail" class="muted"></p>
+    <div class="actions"><button id="reload" class="primary">Reload</button><button id="log">Show Log</button></div>
+  </div>
+</div>
 <script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
   const frame = document.getElementById("chat");
   const origin = ${JSON.stringify(frameOrigin)};
-  frame.addEventListener("load", () => document.body.classList.add("loaded"));
+  const errorBox = document.getElementById("error");
+  let watchdog;
+  let matchColors = true;
+
+  function showError(title, detail) {
+    document.getElementById("error-title").textContent = title;
+    document.getElementById("error-detail").textContent = detail || "";
+    errorBox.hidden = false;
+    vscode.postMessage({ source: "threadside-host", type: "frameProblem", title, detail });
+  }
+  // Every document the frame loads must announce itself; one that does not (an error page, a
+  // navigation away from T3 Code) would otherwise leave a blank tab.
+  function armWatchdog(ms) {
+    clearTimeout(watchdog);
+    watchdog = setTimeout(() => showError("The chat did not load.", "T3 Code did not answer. Check that the server is running, then reload."), ms);
+  }
+  // Each document says "ready" (DOMContentLoaded) before its load event; a document that loads
+  // without saying it is not T3 Code's app (an error page, or a navigation away from it).
+  let readySinceLoad = false;
+  armWatchdog(20000);
+  frame.addEventListener("load", () => {
+    if (readySinceLoad) clearTimeout(watchdog);
+    else armWatchdog(3000);
+    readySinceLoad = false;
+  });
+  document.getElementById("reload").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "reload" }));
+  document.getElementById("log").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
+
   // Keys typed into the tab belong to the chat, so focus always moves on into the frame.
   window.addEventListener("focus", () => frame.focus());
-  document.addEventListener("mousedown", () => frame.focus());
-  let matchColors = true;
+  document.addEventListener("mousedown", (event) => { if (errorBox.hidden) frame.focus(); });
+
   // The editor's live theme colors, read from the webview's --vscode-* variables.
   function palette() {
     const css = getComputedStyle(document.documentElement);
@@ -216,31 +279,31 @@ function hostHtml(src: string, frameOrigin: string, nonce: string, cspSource: st
   function sendPalette() {
     frame.contentWindow.postMessage({ source: "threadside-host", type: "palette", enabled: matchColors, vars: palette() }, origin);
   }
+
   window.addEventListener("message", (event) => {
     const data = event.data;
     if (!data || typeof data !== "object") return;
-    if (event.source === frame.contentWindow && event.origin === origin && data.source === "threadside-bridge") {
-      if (data.type === "ready") sendPalette();
-      if (data.type === "key") {
-        window.dispatchEvent(new KeyboardEvent("keydown", {
-          key: data.key, code: data.code, keyCode: data.keyCode, which: data.keyCode,
-          metaKey: data.metaKey, ctrlKey: data.ctrlKey, altKey: data.altKey, shiftKey: data.shiftKey,
-          repeat: data.repeat, bubbles: true, cancelable: true,
-        }));
-        return;
+    if (event.source === frame.contentWindow) {
+      if (event.origin !== origin || data.source !== "threadside-bridge") return;
+      if (data.type === "ready") {
+        readySinceLoad = true;
+        clearTimeout(watchdog);
+        errorBox.hidden = true;
+        document.body.classList.add("ready");
+        sendPalette();
       }
       if (data.type === "route") vscode.setState({ path: data.path });
       vscode.postMessage(data);
       return;
     }
-    // Messages from the extension arrive from the webview shell (this window's parent, same origin).
-    if (data.source === "threadside-host" && event.source === window.parent && event.origin === window.origin) {
-      if (data.type === "focusComposer" || data.type === "insert" || data.type === "mentions") frame.focus();
-      if (data.type === "config") matchColors = data.matchEditorColors !== false;
-      frame.contentWindow.postMessage(data, origin);
-      // The webview updates its --vscode-* variables after a theme change; read them next frame.
-      if (data.type === "theme" || data.type === "config") requestAnimationFrame(() => setTimeout(sendPalette, 50));
-    }
+    // From the extension: the webview shell posts with this page's own origin, which no other frame
+    // (the chat or anything inside it) can claim.
+    if (event.origin !== window.origin || data.source !== "threadside-host") return;
+    if (data.type === "focusComposer" || data.type === "insert" || data.type === "mentions") frame.focus();
+    if (data.type === "config") matchColors = data.matchEditorColors !== false;
+    frame.contentWindow.postMessage(data, origin);
+    // The webview updates its --vscode-* variables after a theme change; read them next frame.
+    if (data.type === "theme" || data.type === "config") requestAnimationFrame(() => setTimeout(sendPalette, 50));
   });
 })();
 </script>

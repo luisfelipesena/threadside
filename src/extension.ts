@@ -10,7 +10,8 @@ import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
 import { isInside, mentionFor, parseFileHref } from "./native/fileLinks";
 import { reviewChanges } from "./native/review";
-import { relative, statusLabel, ThreadsTree } from "./native/threadsTree";
+import { lockChatGroup } from "./native/chatDock";
+import { relative, statusLabel } from "./native/threadInfo";
 import { AuthProxy } from "./proxy/authProxy";
 import { threadIdFromPath, threadPath } from "./routes";
 import { type BridgeMessage, ChatPanel, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
@@ -29,8 +30,6 @@ export function deactivate(): void {}
 class Controller implements vscode.Disposable {
   private readonly environment: Environment;
   private readonly proxy: AuthProxy;
-  private readonly tree: ThreadsTree;
-  private readonly treeView: vscode.TreeView<unknown>;
   private readonly statusItem: vscode.StatusBarItem;
   private readonly panels = new Set<ChatPanel>();
   private activePanel: ChatPanel | undefined;
@@ -47,12 +46,10 @@ class Controller implements vscode.Disposable {
     this.environment = new Environment(context.secrets);
     this.proxy = new AuthProxy(vscode.Uri.joinPath(context.extensionUri, "dist", "bridge.js").fsPath);
     this.scope = config().get("threadScope", "workspace");
-    this.tree = new ThreadsTree(this.environment, () => this.scopeProjects());
-    this.treeView = vscode.window.createTreeView("threadside.threads", { treeDataProvider: this.tree as vscode.TreeDataProvider<unknown>, showCollapseAll: true });
     this.statusItem = vscode.window.createStatusBarItem("threadside.status", vscode.StatusBarAlignment.Right, 1000);
     this.statusItem.name = "T3 Code";
     this.statusItem.command = "threadside.toggleChat";
-    this.disposables.push(this.environment, this.tree, this.treeView, this.statusItem, this.proxy);
+    this.disposables.push(this.environment, this.statusItem, this.proxy);
   }
 
   async start(): Promise<void> {
@@ -72,7 +69,6 @@ class Controller implements vscode.Disposable {
         } else if (status.kind === "needs-pairing") {
           this.proxy.setTarget(undefined);
         }
-        this.tree.refresh();
         this.updateStatus();
       }),
       this.environment.shell.onDidChange((ids) => {
@@ -84,9 +80,7 @@ class Controller implements vscode.Disposable {
         if (event.affectsConfiguration("threadside.serverUrl") || event.affectsConfiguration("threadside.t3Home")) {
           void this.environment.connect();
         }
-        if (event.affectsConfiguration("threadside")) this.tree.refresh();
       }),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.tree.refresh()),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
         if (editor) this.lastTextEditor = editor;
       }),
@@ -118,8 +112,9 @@ class Controller implements vscode.Disposable {
   /** The proxy origin as the webview reaches it; over Remote-SSH this is a forwarded port. */
   private proxyOrigin(): Promise<string> {
     this.originPromise ??= (async () => {
-      const port = await this.proxy.start(this.context.globalState.get<number>(PORT_KEY));
-      await this.context.globalState.update(PORT_KEY, port);
+      // Per window: the iframe origin includes the port, and T3 Code keeps local UI state per origin.
+      const port = await this.proxy.start(this.context.workspaceState.get<number>(PORT_KEY));
+      await this.context.workspaceState.update(PORT_KEY, port);
       const external = await vscode.env.asExternalUri(vscode.Uri.parse(`http://127.0.0.1:${port}`));
       const origin = new URL(external.toString(true)).origin;
       this.proxy.allowOrigin(origin);
@@ -162,14 +157,17 @@ class Controller implements vscode.Disposable {
     // Like Cursor's chat: a narrow column on the right that keeps file tabs out of it.
     if (beside && groupsBefore === 1 && vscode.window.tabGroups.all.length === 2) {
       await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.64 }, { size: 0.36 }] });
-      await vscode.commands.executeCommand("workbench.action.lockEditorGroup");
+      await lockChatGroup(isChatTab);
     }
     return chat;
   }
 
   private onPanelChanged(): void {
     const active = [...this.panels].find((panel) => panel.panel.active);
-    if (active) this.activePanel = active;
+    if (active) {
+      this.activePanel = active;
+      void lockChatGroup(isChatTab);
+    }
     const thread = this.activeThread();
     void vscode.commands.executeCommand("setContext", "threadside.activeHasWorktree", Boolean(thread && this.threadDir(thread)));
     this.updatePanelTitles();
@@ -261,7 +259,7 @@ class Controller implements vscode.Disposable {
   /** The editor group for files: the first group that does not hold a chat tab. */
   private fileColumn(): vscode.ViewColumn {
     for (const group of vscode.window.tabGroups.all) {
-      const holdsChat = group.tabs.some((tab) => tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith(VIEW_TYPE));
+      const holdsChat = group.tabs.some(isChatTab);
       if (!holdsChat) return group.viewColumn;
     }
     return vscode.ViewColumn.One;
@@ -287,7 +285,12 @@ class Controller implements vscode.Disposable {
   /** Paths relative to the active thread's checkout when inside it; absolute otherwise. */
   private mentionPath(path: string): string {
     const thread = this.activeThread();
-    const roots = [thread && this.threadDir(thread), ...(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath)];
+    // The agent runs in the thread's checkout, else in its project's root, so paths are relative to that.
+    const roots = [
+      thread && this.threadDir(thread),
+      this.environment.shell.projectForPath(path)?.workspaceRoot,
+      ...(vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+    ];
     for (const root of roots) {
       if (root && isInside(root, path) && root !== path) return relativePath(root, path).split("\\").join("/");
     }
@@ -313,26 +316,25 @@ class Controller implements vscode.Disposable {
     command("threadside.openChat", () => this.openChat());
     command("threadside.toggleChat", () => this.toggleChat());
     command("threadside.focusComposer", async () => (await this.openChat()).focusComposer());
+    // ⌘L, like Cursor: the selection (or, with none, the whole file) goes to the chat as a chip;
+    // from the chat itself it just focuses the composer.
     command("threadside.focusOrAddSelection", async () => {
       const editor = vscode.window.activeTextEditor;
-      if (editor && !editor.selection.isEmpty) return vscode.commands.executeCommand("threadside.addSelection");
+      if (editor && editor.selections.some((selection) => !selection.isEmpty)) return this.addSelection();
       const chat = await this.openChat();
-      chat.focusComposer();
+      if (editor) chat.insertMentions([mentionFor(this.mentionPath(editor.document.uri.fsPath))]);
+      else chat.focusComposer();
     });
     command("threadside.newThread", () => this.newThread());
     command("threadside.newThreadInTab", () => this.openChat({ newTab: true }));
-    command("threadside.openThread", (threadId: string) => this.openThread(threadId));
-    command("threadside.openThreadInNewTab", (node?: { thread?: ThreadShell }) => {
-      const id = node?.thread?.id ?? this.activeThread()?.id;
-      if (id) return this.openThread(id, true);
-    });
     command("threadside.searchThreads", () => this.searchThreads());
     command("threadside.addSelection", () => this.addSelection());
-    command("threadside.addFile", async (uri?: vscode.Uri) => {
-      const target = uri ?? (vscode.window.activeTextEditor ?? this.lastTextEditor)?.document.uri;
-      if (!target) return;
+    command("threadside.addFile", async (uri?: vscode.Uri, uris?: vscode.Uri[]) => {
+      const targets = uris?.length ? uris : uri ? [uri] : [(vscode.window.activeTextEditor ?? this.lastTextEditor)?.document.uri].filter(Boolean);
+      const files = (targets as vscode.Uri[]).filter((target) => target.scheme === "file" || target.scheme === "vscode-remote");
+      if (!files.length) return;
       const chat = await this.openChat();
-      chat.insertMentions([mentionFor(this.mentionPath(target.fsPath))]);
+      chat.insertMentions(files.slice(0, 50).map((file) => mentionFor(this.mentionPath(file.fsPath))));
     });
     command("threadside.toggleMaximize", async () => {
       if (!this.activePanel?.panel.active) await this.openChat();
@@ -384,12 +386,6 @@ class Controller implements vscode.Disposable {
       if (thread && environmentId) return vscode.env.openExternal(vscode.Uri.parse(`https://app.t3.codes${threadPath(environmentId, thread.id)}`));
     });
     command("threadside.openSettings", () => this.openChat({ path: "/settings/general" }));
-    command("threadside.toggleScope", async () => {
-      this.scope = this.scope === "workspace" ? "all" : "workspace";
-      await config().update("threadScope", this.scope, vscode.ConfigurationTarget.Global);
-      this.tree.refresh();
-      vscode.window.setStatusBarMessage(this.scope === "all" ? "T3: showing every project" : "T3: showing this workspace", 2500);
-    });
     command("threadside.refresh", () => this.environment.connect());
     command("threadside.connect", () => this.connectFlow());
     command("threadside.disconnect", async () => {
@@ -697,6 +693,10 @@ class Controller implements vscode.Disposable {
     for (const panel of this.panels) panel.panel.dispose();
     for (const disposable of this.disposables) disposable.dispose();
   }
+}
+
+function isChatTab(tab: vscode.Tab): boolean {
+  return tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith(VIEW_TYPE);
 }
 
 function config(): vscode.WorkspaceConfiguration {

@@ -7,7 +7,9 @@
   const HOST = "threadside-host";
   const BRIDGE = "threadside-bridge";
   const state = {
-    editorKeys: [],
+    shortcuts: [],
+    compact: true,
+    compacted: false,
     openFilesInEditor: true,
     theme: readCookie("threadside_theme_" + location.port) === "light" ? "light" : "dark",
   };
@@ -64,6 +66,17 @@
     colorQueries.add(mql);
     return mql;
   };
+
+  // Inside the editor this page is a cross-site frame, where the browser refuses T3 Code's default
+  // SameSite=Strict cookies (it persists the sidebar's state that way). SameSite=None keeps them.
+  if (window.cookieStore && typeof window.cookieStore.set === "function") {
+    const nativeSet = window.cookieStore.set.bind(window.cookieStore);
+    window.cookieStore.set = function (nameOrOptions, value) {
+      const options = typeof nameOrOptions === "string" ? { name: nameOrOptions, value: value } : Object.assign({}, nameOrOptions);
+      options.sameSite = "none";
+      return nativeSet(options);
+    };
+  }
 
   // Route changes tell the host which thread the tab shows.
   function reportRoute() {
@@ -132,8 +145,9 @@
     return nativeOpen(url, target, features);
   };
 
-  // Keys: T3 Code handles its own shortcuts first. Keys it leaves alone, and the editor's
-  // reserved shortcuts, go to the editor so Cmd+P, Cmd+Shift+P and friends keep working.
+  // Keys: the editor drops key events that a page dispatches (only trusted keys reach its keybindings),
+  // and keys typed inside this frame never reach it at all. So the shortcuts that must work from the
+  // chat are mapped to editor commands by the extension; every other key belongs to T3 Code.
   // `mod` is ⌘ on macOS and Ctrl elsewhere; on macOS Ctrl stays `ctrl` (Ctrl+N is "next line" there).
   function chord(event) {
     const parts = [];
@@ -141,45 +155,34 @@
     if (isMac && event.ctrlKey) parts.push("ctrl");
     if (event.altKey) parts.push("alt");
     if (event.shiftKey) parts.push("shift");
-    parts.push(event.key.length === 1 ? event.key.toLowerCase() : event.key.toLowerCase());
+    parts.push(event.key.toLowerCase());
     return parts.join("+");
-  }
-  function forwardKey(event) {
-    post({
-      type: "key",
-      key: event.key,
-      code: event.code,
-      keyCode: event.keyCode,
-      metaKey: event.metaKey,
-      ctrlKey: event.ctrlKey,
-      altKey: event.altKey,
-      shiftKey: event.shiftKey,
-      repeat: event.repeat,
-    });
   }
   window.addEventListener(
     "keydown",
     (event) => {
-      if (!(event.metaKey || event.ctrlKey || /^F\d+$/.test(event.key))) return;
-      // ⌘N: the editor starts the thread, so it lands in the open thread's (or workspace's) repository.
-      if (chord(event) === "mod+n") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        post({ type: "command", command: "newThread" });
-        return;
-      }
-      if (state.editorKeys.includes(chord(event))) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        forwardKey(event);
-        return;
-      }
-      setTimeout(() => {
-        if (!event.defaultPrevented) forwardKey(event);
-      }, 0);
+      // Shortcuts this bridge dispatches on T3 Code's behalf are untrusted: let T3 Code have them.
+      if (!event.isTrusted || !(event.metaKey || event.ctrlKey || event.altKey)) return;
+      const key = chord(event);
+      if (!state.shortcuts.includes(key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      post({ type: "shortcut", chord: key });
     },
     true,
   );
+
+  // Errors in the chat page go to the editor's log, so a blank or broken tab can be diagnosed.
+  let reportedErrors = 0;
+  function reportError(message, detail) {
+    if (reportedErrors++ >= 20) return;
+    post({ type: "clientError", message: String(message || "Unknown error").slice(0, 500), detail: String(detail || "").slice(0, 1500), path: location.pathname });
+  }
+  window.addEventListener("error", (event) => reportError(event.message, event.error && event.error.stack));
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event.reason;
+    reportError(reason && reason.message ? reason.message : reason, reason && reason.stack);
+  });
 
   // Files dragged from the editor (Explorer, tabs, search results) become file chips, like Cursor.
   // The editor delivers drops to a webview while Shift is held.
@@ -360,6 +363,22 @@
     }, 150);
   }
 
+  // Beside the code the column is narrow: start with T3 Code's own thread sidebar closed so the
+  // conversation gets the room (⌘B, or full screen, brings it back). Once per page load, with
+  // T3 Code's own toggle, so its saved preference stays its own.
+  function compactSidebar(attempt) {
+    if (!state.compact || state.compacted || window.innerWidth >= 1000) return;
+    const wrapper = document.querySelector('[data-slot="sidebar-wrapper"]');
+    if (!wrapper) {
+      if ((attempt || 0) < 50) setTimeout(() => compactSidebar((attempt || 0) + 1), 100);
+      return;
+    }
+    state.compacted = true;
+    if (wrapper.getAttribute("data-sidebar-state") !== "expanded") return;
+    const trigger = wrapper.querySelector('[data-sidebar="trigger"]');
+    if (trigger) trigger.click();
+  }
+
   function navigate(path) {
     if (location.pathname + location.search === path) return;
     history.pushState(history.state, "", path);
@@ -372,7 +391,9 @@
     if (!message || message.source !== HOST) return;
     switch (message.type) {
       case "config":
-        state.editorKeys = Array.isArray(message.editorKeys) ? message.editorKeys : [];
+        state.shortcuts = Array.isArray(message.shortcuts) ? message.shortcuts : [];
+        state.compact = message.compactChat !== false;
+        compactSidebar();
         state.openFilesInEditor = message.openFilesInEditor !== false;
         break;
       case "theme":
