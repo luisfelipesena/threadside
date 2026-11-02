@@ -212,16 +212,25 @@ export class Environment implements vscode.Disposable {
       }
       const previous = stored;
       const issued = await issueLocalSession(cli, t3Home, clientLabel());
-      stored = {
+      const mine: StoredCredential = {
         token: issued.token,
         expiresAt: issued.expiresAt,
         sessionId: issued.sessionId,
         httpBaseUrl: target.httpBaseUrl,
         source: "local-cli",
       };
-      await this.secrets.store(key, JSON.stringify(stored));
-      if (previous) await this.revoke(previous);
-      log().info(`Issued a T3 Code session for ${descriptor.label}.`);
+      // Windows of one editor share this storage: when another window stored a session while we were
+      // issuing ours, use theirs and revoke ours instead of leaving one behind.
+      const latest = await this.secrets.get(key);
+      if (latest !== raw && latest) {
+        await this.revoke(mine);
+        stored = JSON.parse(latest) as StoredCredential;
+      } else {
+        stored = mine;
+        await this.secrets.store(key, JSON.stringify(stored));
+        if (previous) await this.revoke(previous);
+        log().info(`Issued a T3 Code session for ${descriptor.label}.`);
+      }
     }
     return stored ? { ...stored, key } : undefined;
   }

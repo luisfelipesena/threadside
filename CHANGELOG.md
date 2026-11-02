@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- Windows of one editor that connect at the same moment share one T3 Code session instead of leaving an extra one behind.
+
 ## 0.1.0
 
 First release.

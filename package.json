@@ -2,7 +2,7 @@
   "name": "threadside",
   "displayName": "Threadside: T3 Code chat for Cursor and VS Code",
   "description": "Use your own T3 Code server as the chat beside your code: every thread, provider, worktree and device from T3 Code, with native file links, diffs, shortcuts and a thread list in the editor.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "luisfelipesena",
   "preview": true,
   "license": "MIT",
