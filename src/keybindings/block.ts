@@ -14,6 +14,8 @@ export const TAKEOVER_RULES: Array<{ key: string; command: string; when?: string
   { key: "cmd+'", command: "threadside.newThread" },
   { key: "alt+cmd+e", command: "threadside.toggleMaximize" },
   { key: "alt+cmd+r", command: "threadside.reviewChanges", when: "threadside.activeHasWorktree" },
+  // In the thread search, ahead of any ⌘T the user bound elsewhere.
+  { key: "cmd+t", command: "threadside.openPickedThreadInTab", when: "threadside.threadPickerOpen" },
 ];
 
 /**

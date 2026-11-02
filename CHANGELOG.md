@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Thread search (⇧⌘H) groups threads the way T3 Code does: Pinned, Active, Snoozed and Settled, each with a count. Settled threads carry a check icon and say "Settled".
+- Each row has a Settle button (Unsettle on a settled thread) next to Open in New Tab. The list stays open and updates in place.
+- ⌘T opens the highlighted thread in a new editor tab. Cursor hands the Enter key to extensions without its modifiers, so ⌘↵ cannot be told apart from ↵; the managed shortcut block puts ⌘T ahead of any other ⌘T while the list is open.
+
 ## 0.3.0
 
 - The chat docks on the right, in the Secondary Side Bar next to Cursor's agent, and stays there. ⌘I shows or hides it; its title bar has New Thread, Search Threads and Open in Editor Tab. `threadside.chatLocation` still opens it as an editor tab instead.

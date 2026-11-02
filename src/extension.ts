@@ -3,7 +3,7 @@ import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
 import { sidebarProjectKey } from "./connection/projectKey";
-import { isRunning, limitResetAt, sectionOf, type ThreadShell } from "./connection/shell";
+import { isRunning, isSettled, limitResetAt, type ThreadShell } from "./connection/shell";
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
@@ -11,7 +11,8 @@ import { isInside, mentionFor } from "./native/fileLinks";
 import { resolveFileLink } from "./native/resolveFile";
 import { reviewChanges } from "./native/review";
 import { lockChatGroup } from "./native/chatDock";
-import { relative, statusLabel } from "./native/threadInfo";
+import { statusLabel } from "./native/threadInfo";
+import { isOpenInTab, type ThreadItem, threadPickerItems } from "./native/threadPicker";
 import { AuthProxy } from "./proxy/authProxy";
 import { threadIdFromPath, threadPath } from "./routes";
 import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
@@ -45,6 +46,8 @@ class Controller implements vscode.Disposable {
   /** The docked chat, once the editor has shown its view. */
   private sideView: ChatPanel | undefined;
   private sideViewWaiters: Array<(chat: ChatPanel) => void> = [];
+  /** The open ⇧⌘H picker, for ⌘T. (Its Enter key reaches extensions without modifiers, so ⌘↵ cannot be told apart.) */
+  private threadPicker: { openActiveInTab(): void } | undefined;
 
   constructor(private readonly context: vscode.ExtensionContext) {
     this.environment = new Environment(context.secrets);
@@ -418,6 +421,7 @@ class Controller implements vscode.Disposable {
     command("threadside.newThread", () => this.newThread());
     command("threadside.newThreadInTab", () => this.openChat({ newTab: true }));
     command("threadside.searchThreads", () => this.searchThreads());
+    command("threadside.openPickedThreadInTab", () => this.threadPicker?.openActiveInTab());
     command("threadside.addSelection", () => this.addSelection());
     command("threadside.addFile", async (uri?: vscode.Uri, uris?: vscode.Uri[]) => {
       const targets = uris?.length ? uris : uri ? [uri] : [(vscode.window.activeTextEditor ?? this.lastTextEditor)?.document.uri].filter(Boolean);
@@ -610,41 +614,54 @@ class Controller implements vscode.Disposable {
     chat.insertMentions(mentions.length ? mentions : [mentionFor(path)]);
   }
 
+  /**
+   * ⇧⌘H: every thread, grouped the way T3 Code's list groups them (pinned, active, snoozed, settled).
+   * ↵ opens a thread in the chat, ⌘T or the tab button opens it in a new editor tab, and the check
+   * button settles it (or brings a settled one back) without closing the list.
+   */
   private async searchThreads(): Promise<void> {
-    const projects = this.environment.shell.projects;
+    const shell = this.environment.shell;
     const scope = this.scopeProjects();
-    type Item = vscode.QuickPickItem & { thread?: ThreadShell };
-    const sectionIcon: Record<string, string> = { pinned: "$(pinned)", active: "$(comment-discussion)", snoozed: "$(bell-slash)", settled: "$(check)" };
-    const toItem = (thread: ThreadShell): Item => ({
-      label: `${isRunning(thread) ? "$(loading~spin)" : sectionIcon[sectionOf(thread)]} ${thread.title || "Untitled thread"}`,
-      description: [projects.get(thread.projectId)?.title, thread.branch].filter(Boolean).join(" · "),
-      detail: `${statusLabel(thread)} · ${relative(thread.updatedAt)} ago`,
-      thread,
-      buttons: [{ iconPath: new vscode.ThemeIcon("link-external"), tooltip: "Open in New Tab" }],
-    });
-    const threads = [...this.environment.shell.threads.values()].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-    const inScope = scope ? threads.filter((thread) => scope.has(thread.projectId)) : threads;
-    const others = scope ? threads.filter((thread) => !scope.has(thread.projectId)) : [];
-    const items: Item[] = [
-      ...inScope.slice(0, 400).map(toItem),
-      ...(others.length ? [{ label: "Other projects", kind: vscode.QuickPickItemKind.Separator } as Item, ...others.slice(0, 400).map(toItem)] : []),
-    ];
-    const pick = vscode.window.createQuickPick<Item>();
+    const open = (thread: ThreadShell | undefined, newTab: boolean) => {
+      log().debug(`Thread picker: open ${thread ? "a thread" : "nothing"}${newTab ? " in a new tab" : ""}.`);
+      if (!thread) return;
+      pick.hide();
+      void this.openThread(thread.id, newTab);
+    };
+    const pick = vscode.window.createQuickPick<ThreadItem>();
     pick.title = "T3 Threads";
-    pick.placeholder = "Search threads by title, project or branch";
+    pick.placeholder = "Search threads by title, project or branch  ·  ↵ open  ·  ⌘T open in new tab";
     pick.matchOnDescription = true;
     pick.matchOnDetail = true;
-    pick.items = items;
-    pick.onDidTriggerItemButton(({ item }) => {
-      if (item.thread) void this.openThread(item.thread.id, true);
-      pick.hide();
+    const refresh = () => {
+      const active = pick.activeItems[0]?.thread?.id;
+      pick.items = threadPickerItems([...shell.threads.values()], scope, (id) => shell.projects.get(id)?.title);
+      const again = active && pick.items.find((item) => item.thread?.id === active);
+      if (again) pick.activeItems = [again];
+    };
+    refresh();
+    const subscription = shell.onDidChange(refresh);
+    pick.onDidTriggerItemButton(({ item, button }) => {
+      const thread = item.thread;
+      if (!thread) return;
+      if (isOpenInTab(button)) return open(thread, true);
+      const settled = isSettled(thread);
+      void this.environment
+        .dispatch(settled ? { type: "thread.unsettle", threadId: thread.id, reason: "user" } : { type: "thread.settle", threadId: thread.id })
+        .then(
+          () => vscode.window.setStatusBarMessage(`$(check) ${settled ? "Unsettled" : "Settled"} “${thread.title}”`, 2500),
+          (error: unknown) => void vscode.window.showErrorMessage(`T3: ${error instanceof Error ? error.message : String(error)}`),
+        );
     });
-    pick.onDidAccept(() => {
-      const thread = pick.selectedItems[0]?.thread;
-      if (thread) void this.openThread(thread.id);
-      pick.hide();
+    pick.onDidAccept(() => open(pick.selectedItems[0]?.thread, false));
+    pick.onDidHide(() => {
+      subscription.dispose();
+      this.threadPicker = undefined;
+      void vscode.commands.executeCommand("setContext", "threadside.threadPickerOpen", false);
+      pick.dispose();
     });
-    pick.onDidHide(() => pick.dispose());
+    this.threadPicker = { openActiveInTab: () => open(pick.activeItems[0]?.thread, true) };
+    void vscode.commands.executeCommand("setContext", "threadside.threadPickerOpen", true);
     pick.show();
   }
 

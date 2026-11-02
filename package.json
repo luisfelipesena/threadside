@@ -2,7 +2,7 @@
   "name": "threadside",
   "displayName": "Threadside: T3 Code chat for Cursor and VS Code",
   "description": "Your own T3 Code server's chat beside your code: every thread, provider, worktree and device from T3 Code, with file links that open in the editor, selection and file chips, review in the diff view and Cursor-style shortcuts.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "luisfelipesena",
   "preview": true,
   "license": "MIT",
@@ -226,6 +226,11 @@
         "command": "threadside.dockOnRight",
         "title": "Move Chat…",
         "category": "T3"
+      },
+      {
+        "command": "threadside.openPickedThreadInTab",
+        "title": "Open Selected Thread in New Tab",
+        "category": "T3"
       }
     ],
     "menus": {
@@ -279,6 +284,10 @@
         {
           "command": "threadside.unsettle",
           "when": "threadside.connected"
+        },
+        {
+          "command": "threadside.openPickedThreadInTab",
+          "when": "false"
         }
       ],
       "editor/title/context": [
@@ -374,6 +383,12 @@
         "key": "ctrl+i",
         "mac": "cmd+i",
         "when": "activeWebviewPanelId == 'threadside.chat'"
+      },
+      {
+        "command": "threadside.openPickedThreadInTab",
+        "key": "ctrl+t",
+        "mac": "cmd+t",
+        "when": "threadside.threadPickerOpen"
       }
     ],
     "configuration": {

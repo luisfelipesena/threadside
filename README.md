@@ -52,7 +52,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 | <kbd>⌘I</kbd> | Open the chat focused on the composer; from the chat, hide it (the conversation keeps running) |
 | <kbd>⌘L</kbd> | Add the selection, or the current file, to the chat |
 | <kbd>⌘N</kbd> in the chat, <kbd>⌘'</kbd> anywhere | New thread in the repository you are in |
-| <kbd>⇧⌘H</kbd> | Search threads |
+| <kbd>⇧⌘H</kbd> | Search threads, grouped as Pinned, Active, Snoozed and Settled. <kbd>↵</kbd> opens a thread in the chat, <kbd>⌘T</kbd> opens it in a new tab, and each row has **Settle** and **Open in New Tab** buttons |
 | <kbd>⌥⌘E</kbd> | Open the thread in a full editor tab |
 | <kbd>⌥⌘R</kbd> | Review the thread's changes |
 
