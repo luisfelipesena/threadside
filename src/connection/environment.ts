@@ -180,6 +180,12 @@ export class Environment implements vscode.Disposable {
     return this.rpc.call<T>(tag, payload);
   }
 
+  /** A streaming call; settles when the stream ends. */
+  stream(tag: string, payload: unknown, onChunk: (values: unknown[]) => void): Promise<unknown> {
+    if (!this.rpc?.isOpen) return Promise.reject(new Error("Not connected to T3 Code."));
+    return this.rpc.stream(tag, payload, onChunk).done;
+  }
+
   /** Sends an orchestration command such as `thread.settle`. */
   dispatch(command: Record<string, unknown>): Promise<unknown> {
     return this.call("orchestration.dispatchCommand", { commandId: crypto.randomUUID(), ...command });

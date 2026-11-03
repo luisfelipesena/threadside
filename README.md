@@ -20,6 +20,7 @@ The chat is T3 Code's own web app, served by your server, so every provider, acc
 - **The chat sees your editor.** A message you send carries a `Cursor editor (logger.py:158, 9 errors)` chip: the file in focus, the cursor or selected lines, the other open files and the Problems the editor shows. Ask "what is this error?" without copying anything. It is read when you press Enter and attached again in a thread only after it changes; `threadside.sendEditorContext` turns it off.
 - **Native review.** **Review Thread Changes** opens the thread's uncommitted work, or its whole branch, in the editor's multi-file diff.
 - **Side chats, forks, worktrees, devices, previews** and everything else in T3 Code work as they do in the app. `/btw` (or **T3: Side Chat**) opens a side chat with **Bring back**; **Fork from this response** branches a thread.
+- **T3 Code updates from the editor.** Threadside checks T3 Code's releases on your server's channel (nightly or stable). When a newer build is out, the status bar shows an up arrow and offers **Update** once; it updates the server the way T3 Code's own update button does (through the desktop app when one runs the server) and the chat reloads into the new UI when the server comes back. It warns first if threads are working.
 - **Remote-SSH aware.** In a remote window Threadside runs on the remote machine, finds the T3 Code server there and reaches it through the editor's own tunnel.
 - **Clear when something breaks.** A chat that does not load shows why, with **Reload** and **Show Log**; page errors go to the **Threadside** output channel.
 
@@ -85,6 +86,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.chatLocation` | `side` | Dock the chat in a side bar (the Secondary Side Bar on first run), or open it as an editor tab beside the code or in the active group. |
 | `threadside.threadScope` | `workspace` | Thread search lists this window's projects first, or every project equally. |
 | `threadside.sendEditorContext` | `true` | Send the focused file, cursor or selection, open files and Problems with a message, as a chip. |
+| `threadside.checkForUpdates` | `true` | Look for newer T3 Code builds every 30 minutes and offer to update the server. |
 | `threadside.openChatOnStartup` | `true` | Show the chat when a window starts, in place of the agent pane Cursor reopens on every start. The code keeps the focus. |
 | `threadside.compactChat` | `true` | Start the narrow chat with T3 Code's thread sidebar closed. |
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |

@@ -4,6 +4,7 @@ import { resolveT3Home } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
 import { sidebarProjectKey } from "./connection/projectKey";
 import { isRunning, isSettled, limitResetAt, type ThreadShell } from "./connection/shell";
+import { canSelfUpdate, newerRelease, ReleaseFeed } from "./connection/updates";
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
@@ -39,6 +40,10 @@ class Controller implements vscode.Disposable {
   private originPromise: Promise<string> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly lastSeen = new Map<string, ThreadShell>();
+  private readonly releases = new ReleaseFeed();
+  /** A newer T3 Code than the connected server runs, on the server's channel. */
+  private availableUpdate: string | undefined;
+  private serverVersion: string | undefined;
   private scope: "workspace" | "all";
   /** The last text editor, so commands still find it after focus moves to the chat. */
   private lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
@@ -79,8 +84,12 @@ class Controller implements vscode.Disposable {
       this.environment.onDidChangeStatus((status) => {
         if (status.kind === "connected") {
           this.proxy.setTarget(status.target);
-          // Reload only tabs that show another server or the "not connected" page; a brief drop keeps the UI as it was.
-          for (const panel of this.panels) if (panel.renderedFor !== status.httpBaseUrl) void panel.render(status.httpBaseUrl);
+          // Reload only tabs that show another server or the "not connected" page, or every tab once the
+          // server runs a new build (its UI comes with it); a brief drop keeps the UI as it was.
+          const upgraded = this.serverVersion !== undefined && this.serverVersion !== status.descriptor.serverVersion;
+          this.serverVersion = status.descriptor.serverVersion;
+          for (const panel of this.panels) if (upgraded || panel.renderedFor !== status.httpBaseUrl) void panel.render(status.httpBaseUrl);
+          void this.checkForUpdate();
         } else if (status.kind === "needs-pairing") {
           this.proxy.setTarget(undefined);
         }
@@ -109,6 +118,9 @@ class Controller implements vscode.Disposable {
       return;
     }
     await this.environment.connect();
+    // T3 Code's desktop app looks for builds every few minutes; GitHub allows 60 unauthenticated calls an hour.
+    const updates = setInterval(() => void this.checkForUpdate(), 30 * 60_000);
+    this.disposables.push({ dispose: () => clearInterval(updates) });
     await this.dockOnRightOnce();
     if (config().get("openChatOnStartup", true) && this.panels.size === 0) await this.showChatOnStartup();
   }
@@ -476,6 +488,7 @@ class Controller implements vscode.Disposable {
 
     command("threadside.openChat", () => this.openChat());
     command("threadside.toggleChat", () => this.toggleChat());
+    command("threadside.updateServer", () => this.updateServer());
     command("threadside.focusComposer", async () => (await this.openChat()).focusComposer());
     // ⌘L, like Cursor: the selection (or, with none, the whole file) goes to the chat as a chip;
     // from the chat itself it just focuses the composer.
@@ -631,6 +644,69 @@ class Controller implements vscode.Disposable {
     const project = target ?? (currentId ? this.environment.shell.projects.get(currentId) : undefined) ?? this.workspaceProject();
     // T3 Code's new thread opens its project picker; answering it keeps the draft in the right repository.
     this.runT3Shortcut(chat, "chat.new", project?.title);
+  }
+
+  /** Looks for a newer T3 Code on the server's channel and offers it once per version. */
+  private async checkForUpdate(): Promise<void> {
+    const descriptor = this.environment.descriptor;
+    if (!descriptor || !config().get("checkForUpdates", true)) return;
+    try {
+      this.availableUpdate = newerRelease(descriptor.serverVersion, await this.releases.fetch());
+    } catch (error) {
+      log().warn(`Could not check for T3 Code updates: ${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    this.updateStatus();
+    const offered = "threadside.updateOffered";
+    if (!this.availableUpdate || this.context.globalState.get(offered) === this.availableUpdate) return;
+    await this.context.globalState.update(offered, this.availableUpdate);
+    const choice = await vscode.window.showInformationMessage(
+      `T3 Code ${this.availableUpdate} is available. ${descriptor.label} runs ${descriptor.serverVersion}.`,
+      "Update",
+      "Later",
+    );
+    if (choice === "Update") await vscode.commands.executeCommand("threadside.updateServer");
+  }
+
+  /**
+   * Updates the connected server the way T3 Code's own update button does: the server installs the
+   * build and restarts (through its desktop app when one runs it), the chat reconnects and, seeing a
+   * new version, loads the new UI.
+   */
+  private async updateServer(): Promise<void> {
+    const descriptor = this.environment.descriptor;
+    const target = this.availableUpdate;
+    if (!descriptor) throw new Error("Not connected to T3 Code.");
+    if (!target) {
+      void vscode.window.showInformationMessage(`T3 Code ${descriptor.serverVersion} on ${descriptor.label} is up to date.`);
+      return;
+    }
+    if (!canSelfUpdate(descriptor)) {
+      const channel = target.includes("-nightly.") ? " --channel nightly" : "";
+      void vscode.window.showWarningMessage(`${descriptor.label} cannot update itself. Run \`t3 update${channel} --yes\` there, then restart T3 Code.`);
+      return;
+    }
+    const running = [...this.environment.shell.threads.values()].filter(isRunning).length;
+    const continues = descriptor.capabilities?.serverUpdateThreadContinuation === true;
+    const detail = running && !continues ? `${running} ${running === 1 ? "thread is" : "threads are"} working and will be interrupted.` : "The chat reconnects on its own.";
+    const answer = await vscode.window.showWarningMessage(`Update ${descriptor.label} to T3 Code ${target}? T3 Code restarts.`, { modal: true, detail }, "Update");
+    if (answer !== "Update") return;
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Updating T3 Code to ${target}` }, async (progress) => {
+      let result: { method?: string; desktopUpdateToken?: string } | undefined;
+      await this.environment.stream("server.updateServerWithProgress", { targetVersion: target, ...(continues ? { continueRunningThreads: true } : {}) }, (values) => {
+        for (const event of values as Array<{ type?: string; stage?: string; result?: typeof result }>) {
+          if (event.type === "progress") progress.report({ message: event.stage === "downloading" ? "Downloading…" : "Installing…" });
+          if (event.type === "complete") result = event.result;
+        }
+      });
+      progress.report({ message: "Restarting…" });
+      // The desktop app relaunches into the new build once told to; the connection drops on the way.
+      if (result?.method === "desktop-app" && result.desktopUpdateToken) {
+        await this.environment.call("server.commitDesktopUpdate", { requestId: result.desktopUpdateToken }).catch(() => undefined);
+      }
+    });
+    this.availableUpdate = undefined;
+    this.updateStatus();
   }
 
   /** Starts a draft in this window's project; a window with no T3 project keeps T3 Code's start page. */
@@ -847,12 +923,14 @@ class Controller implements vscode.Disposable {
       if (running) parts.push(`$(loading~spin) ${running}`);
       const reset = active && limitResetAt(active);
       if (reset) parts.push(`$(watch) ${reset.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`);
+      if (this.availableUpdate) parts.push("$(arrow-circle-up)");
       item.text = parts.join(" ");
       const md = new vscode.MarkdownString(undefined, true);
       md.appendMarkdown(`**${status.descriptor.label}** · T3 Code ${status.descriptor.serverVersion}\n\n`);
       if (active) md.appendMarkdown(`Thread: ${active.title} · ${statusLabel(active)}\n\n`);
       md.appendMarkdown(`${running} working · ${waiting} waiting for you\n\n[Search threads](command:threadside.searchThreads) · [New thread](command:threadside.newThread)`);
-      md.isTrusted = { enabledCommands: ["threadside.searchThreads", "threadside.newThread"] };
+      if (this.availableUpdate) md.appendMarkdown(`\n\n$(arrow-circle-up) T3 Code ${this.availableUpdate} is available · [Update](command:threadside.updateServer)`);
+      md.isTrusted = { enabledCommands: ["threadside.searchThreads", "threadside.newThread", "threadside.updateServer"] };
       item.tooltip = md;
     }
     item.show();

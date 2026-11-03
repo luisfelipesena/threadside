@@ -223,6 +223,11 @@
         "icon": "$(link-external)"
       },
       {
+        "command": "threadside.updateServer",
+        "title": "Update T3 Code",
+        "category": "T3"
+      },
+      {
         "command": "threadside.dockOnRight",
         "title": "Move Chat…",
         "category": "T3"
@@ -420,6 +425,11 @@
             "Open the chat as an editor tab in the active editor group."
           ],
           "description": "Where the chat opens. Threads can also open as editor tabs (Open Thread in Editor Tab, or middle-click a thread in the list)."
+        },
+        "threadside.checkForUpdates": {
+          "type": "boolean",
+          "default": true,
+          "description": "Look for a newer T3 Code build on the server's channel (nightly or stable) every 30 minutes, show it in the status bar and offer to update the server, as T3 Code's desktop app does."
         },
         "threadside.openChatOnStartup": {
           "type": "boolean",
