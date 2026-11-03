@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8
+
+- A new window with no folder keeps Cursor's start page: the chat no longer opens there on its own (Cursor restores it with the layout, so it is hidden once). Windows with a folder still open the chat on its thread or a draft in the window's project.
+
 ## 0.3.7
 
 - ⌘I hides the chat without opening Cursor's own chat. The chat docked in the Primary Side Bar (moved to the right) used to be hidden by toggling the Secondary Side Bar first, which showed Cursor's agent pane there; the bar that worked last time now goes first.
