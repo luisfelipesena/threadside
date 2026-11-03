@@ -132,6 +132,11 @@ export class ShellStore {
     return this.projectForRoot(path);
   }
 
+  /** The project whose folder is exactly `path`. */
+  projectAt(path: string): ProjectShell | undefined {
+    return [...this.projects.values()].find((project) => !project.archivedAt && isInside(project.workspaceRoot, path) && isInside(path, project.workspaceRoot));
+  }
+
   private projectForRoot(path: string): ProjectShell | undefined {
     let best: ProjectShell | undefined;
     for (const project of this.projects.values()) {

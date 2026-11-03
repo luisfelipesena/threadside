@@ -117,23 +117,28 @@ class Controller implements vscode.Disposable {
       this.statusItem.show();
       return;
     }
+    await this.dockOnRightOnce();
+    // The chat shows while the connection is made, so Cursor's own pane is on screen as briefly as possible.
+    if (config().get("openChatOnStartup", true)) void this.showChatOnStartup();
     await this.environment.connect();
     // T3 Code's desktop app looks for builds every few minutes; GitHub allows 60 unauthenticated calls an hour.
     const updates = setInterval(() => void this.checkForUpdate(), 30 * 60_000);
     this.disposables.push({ dispose: () => clearInterval(updates) });
-    await this.dockOnRightOnce();
-    if (config().get("openChatOnStartup", true) && this.panels.size === 0) await this.showChatOnStartup();
   }
 
   /**
-   * Cursor reopens its own agent pane in the right-hand sidebar on every start, with no setting to
-   * stop it. Once the window has restored, the chat takes that place, and the code keeps the focus.
+   * Cursor restores its own agent pane in the right-hand sidebar whenever the sidebar's last view comes
+   * from an extension that is not loaded yet (always, in a Remote-SSH window), and has no setting to stop
+   * it. The chat takes that place as soon as the extension starts, again if the restore takes it back,
+   * and the code keeps the focus.
    */
   private async showChatOnStartup(): Promise<void> {
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    if (this.panels.size > 0) return;
-    await this.openChat({ preserveFocus: true });
-    if (sideLocation() === "side") await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+    for (const wait of [200, 1500, 4000]) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      if ([...this.panels].some((panel) => panel.visible)) return;
+      await this.openChat({ preserveFocus: true }).catch((error: Error) => log().warn(`Could not show the chat: ${error.message}`));
+      if (sideLocation() === "side") await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+    }
   }
 
   /**
@@ -716,7 +721,17 @@ class Controller implements vscode.Disposable {
   }
 
   /** Starts a draft in this window's project; a window with no T3 project keeps T3 Code's start page. */
-  private startDraft(chat: ChatPanel): void {
+  private startDraft(chat: ChatPanel, waited = false): void {
+    const shell = this.environment.shell;
+    if (!shell.projects.size && !waited) {
+      // The chat can be ready before the first project list arrives.
+      const once = shell.onDidChange(() => {
+        once.dispose();
+        this.startDraft(chat, true);
+      });
+      this.disposables.push(once);
+      return;
+    }
     const project = this.workspaceProject();
     if (project) this.runT3Shortcut(chat, "chat.new", project.title);
   }
