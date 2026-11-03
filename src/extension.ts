@@ -281,6 +281,11 @@ class Controller implements vscode.Disposable {
       case "openFile":
         void this.openFile(panel, String(message.href ?? ""), Boolean(message.beside));
         break;
+      case "closeChat":
+        if (message.launcherOpen) this.runT3Shortcut(panel, "rightPanel.toggle");
+        else if (panel.panel) panel.panel.dispose();
+        else void this.hideSideView();
+        break;
       case "openExternal":
         if (typeof message.url === "string" && /^https?:\/\//.test(message.url)) {
           void vscode.env.openExternal(vscode.Uri.parse(message.url));

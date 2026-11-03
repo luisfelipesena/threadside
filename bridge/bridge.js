@@ -193,6 +193,16 @@
     true,
   );
 
+  // ⌘W first closes what T3 Code has open (a terminal, the right panel); T3 Code leaves the key alone
+  // when nothing is, and then it closes the chat, as it would close any editor tab. T3 Code does not
+  // count its empty "Open a surface" panel as open, so that one is closed here.
+  window.addEventListener("keydown", (event) => {
+    if (!event.isTrusted || event.repeat || chord(event) !== "mod+w") return;
+    setTimeout(() => {
+      if (!event.defaultPrevented) post({ type: "closeChat", launcherOpen: Boolean(document.querySelector("[data-surface-launcher-keys]")) });
+    }, 0);
+  });
+
   // Copy, cut, paste, select all, undo and redo are menu commands in the editor. They reach the
   // webview's outer page, never this frame, so here the keys do nothing unless the bridge runs them.
   // The browser's own paste keeps images and files from the clipboard.
