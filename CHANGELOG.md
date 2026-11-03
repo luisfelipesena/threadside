@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.6
+
+- T3 Code's Working section starts off in the chat, which has no room for it in a narrow docked list. Each chat keeps its own T3 Code settings; this is set once, so turning it back on in Settings stays.
+
 ## 0.3.5
 
 - **T3: Update T3 Code** works from the editor. Sessions now include `environment:maintain`, the scope T3 Code requires for server updates; a local session without it is replaced on the next connect, and a paired one asks you to connect again.
