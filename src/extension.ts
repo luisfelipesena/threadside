@@ -339,7 +339,7 @@ class Controller implements vscode.Disposable {
   private onBridgeMessage(panel: ChatPanel, message: BridgeMessage): void {
     switch (message.type) {
       case "openFile":
-        void this.openFile(panel, String(message.href ?? ""), Boolean(message.beside));
+        this.openFile(panel, String(message.href ?? ""), Boolean(message.beside)).catch((error: unknown) => log().error(`Could not open the file link: ${error instanceof Error ? error.message : String(error)}`));
         break;
       case "closeChat":
         if (message.launcherOpen) this.runT3Shortcut(panel, "rightPanel.toggle");
@@ -460,15 +460,17 @@ class Controller implements vscode.Disposable {
     const target = await resolveFileLink(href, bases, (path) => this.workspaceUri(path));
     if (!target) return;
     const uri = this.workspaceUri(target.path);
-    const line = Math.max(0, (target.line ?? 1) - 1);
+    const viewColumn = beside ? vscode.ViewColumn.Beside : this.fileColumn();
+    // Without a line, the editor's own viewer for the type opens it: images and PDFs cannot open as text.
+    if (target.line === undefined) {
+      await vscode.commands.executeCommand("vscode.open", uri, { viewColumn, preview: false });
+      return;
+    }
+    const line = Math.max(0, target.line - 1);
     const start = new vscode.Position(line, Math.max(0, (target.column ?? 1) - 1));
     const end = target.endLine ? new vscode.Position(Math.max(line, target.endLine - 1), Number.MAX_SAFE_INTEGER) : start;
     const document = await vscode.workspace.openTextDocument(uri);
-    const editor = await vscode.window.showTextDocument(document, {
-      viewColumn: beside ? vscode.ViewColumn.Beside : this.fileColumn(),
-      selection: new vscode.Range(start, end),
-      preview: false,
-    });
+    const editor = await vscode.window.showTextDocument(document, { viewColumn, selection: new vscode.Range(start, end), preview: false });
     editor.revealRange(new vscode.Range(start, end), vscode.TextEditorRevealType.InCenterIfOutsideViewport);
   }
 
