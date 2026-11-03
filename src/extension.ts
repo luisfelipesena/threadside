@@ -1107,6 +1107,10 @@ class Controller implements vscode.Disposable {
       log().info(`T3 notification "${title}" for a thread outside this window's thread-list filter; not shown.`);
       return;
     }
+    if (thread && this.watching(thread.id)) {
+      log().info(`T3 notification "${title}" for the thread on screen; not shown.`);
+      return;
+    }
     log().info(`T3 notification "${title}"${thread ? "" : " (thread not in the list)"}; shown.`);
     const key = `${String(message.tag ?? "")}|${title}|${body}`;
     const now = Date.now();
@@ -1118,6 +1122,11 @@ class Controller implements vscode.Disposable {
       panel.reveal(false);
       panel.post({ type: "notificationClick", id });
     });
+  }
+
+  /** Whether a chat on screen in this focused window shows the thread, so a notification would only repeat it. */
+  private watching(threadId: string): boolean {
+    return vscode.window.state.focused && [...this.panels].some((panel) => panel.threadId === threadId && panel.visible);
   }
 
   /** The thread a T3 Code notification is about, from its tag. */
@@ -1157,8 +1166,7 @@ class Controller implements vscode.Disposable {
       this.lastSeen.set(id, thread);
       const outOfScope = this.t3ScopeKeys ? !this.inT3Scope(thread, this.t3ScopeKeys) : scope !== undefined && !scope.has(thread.projectId);
       if (mode === "off" || t3Notifies || !before || outOfScope) continue;
-      const visible = [...this.panels].some((panel) => panel.threadId === id && panel.visible && vscode.window.state.focused);
-      if (visible) continue;
+      if (this.watching(id)) continue;
       let message: string | undefined;
       let severity: "info" | "warning" | "error" = "info";
       if (thread.pendingRuntimeRequest && !before.pendingRuntimeRequest) {
