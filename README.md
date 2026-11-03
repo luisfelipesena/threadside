@@ -92,7 +92,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
 | `threadside.matchEditorColors` | `true` | Use the editor's colors and fonts in the chat. |
 | `threadside.openFileLinksInEditor` | `true` | Open file links in the editor (Alt-click for T3 Code's preview). |
-| `threadside.notifications` | `attention` | Notify when a thread waits for you, fails or hits a usage limit. |
+| `threadside.notifications` | `attention` | Notify when a thread waits for you, fails or hits a usage limit. Quiet while T3 Code's own Thread notifications are on; those show as editor notifications whose **Open thread** opens the thread in the chat. |
 
 ## Good to know
 

@@ -67,6 +67,82 @@
     if (trustedParent && window.parent !== window) window.parent.postMessage(Object.assign({ source: BRIDGE }, message), parentOrigin);
   }
 
+  // Notifications: a webview may not ask for the browser's notification permission, so T3 Code saw
+  // it denied and kept "Thread notifications" off. Inside the editor the page gets a Notification that
+  // is always granted and hands each one to the editor, which shows it natively; clicking it there
+  // fires this notification's own click, so T3 Code opens the thread as it would in a browser.
+  const notifications = new Map();
+  let notificationSeq = 0;
+  if (trustedParent && window.parent !== window) {
+    class EditorNotification extends EventTarget {
+      static get permission() {
+        return "granted";
+      }
+      static requestPermission(callback) {
+        if (typeof callback === "function") callback("granted");
+        return Promise.resolve("granted");
+      }
+      constructor(title, options) {
+        super();
+        const opts = options || {};
+        this.title = String(title || "");
+        this.body = String(opts.body || "");
+        this.tag = String(opts.tag || "");
+        this.onclick = null;
+        this.onclose = null;
+        this.id = ++notificationSeq;
+        notifications.set(this.id, this);
+        post({ type: "notification", id: this.id, title: this.title, body: this.body, tag: this.tag });
+      }
+      close() {
+        if (!notifications.delete(this.id)) return;
+        const event = new Event("close");
+        this.dispatchEvent(event);
+        if (typeof this.onclose === "function") this.onclose(event);
+      }
+    }
+    window.Notification = EditorNotification;
+  }
+  function clickNotification(id) {
+    const notification = notifications.get(id);
+    if (!notification) return;
+    const event = new Event("click");
+    notification.dispatchEvent(event);
+    if (typeof notification.onclick === "function") notification.onclick(event);
+  }
+
+  // T3 Code's own notification choice (Settings → Thread notifications), so the extension's
+  // notifications stay quiet while T3 Code's are on.
+  let reportedMode;
+  function reportNotificationMode() {
+    let mode = "off";
+    try {
+      mode = JSON.parse(localStorage.getItem("t3code:client-settings:v1") || "{}").notificationMode || mode;
+    } catch {
+      // unreadable settings: T3 Code's default
+    }
+    if (mode === reportedMode) return;
+    reportedMode = mode;
+    post({ type: "notificationMode", mode });
+  }
+  setInterval(reportNotificationMode, 3000);
+
+  // T3 Code starts with notifications off because a browser has to grant them first; in the editor
+  // they are always granted, so each chat starts with them on, once. A later choice in Settings stays.
+  if (trustedParent) enableNotificationsOnce();
+  function enableNotificationsOnce() {
+    try {
+      if (localStorage.getItem("threadside:notificationsDefault")) return;
+      const raw = localStorage.getItem("t3code:client-settings:v1");
+      const settings = raw ? JSON.parse(raw) : {};
+      if (!settings.notificationMode) settings.notificationMode = "notifications";
+      localStorage.setItem("t3code:client-settings:v1", JSON.stringify(settings));
+      localStorage.setItem("threadside:notificationsDefault", "1");
+    } catch {
+      // storage unavailable: T3 Code keeps its own default
+    }
+  }
+
   // Theme: answer `(prefers-color-scheme: …)` with the editor's theme so T3 Code's "System"
   // appearance follows the editor. An explicit light or dark choice in T3 Code still wins.
   const colorQueries = new Set();
@@ -673,6 +749,9 @@
       case "ideContext":
         if (pendingSend && pendingSend.id === message.requestId) finishSend(message.context);
         break;
+      case "notificationClick":
+        clickNotification(message.id);
+        break;
       case "palette":
         applyPalette(message.enabled ? message.vars : null);
         break;
@@ -693,5 +772,7 @@
   document.addEventListener("DOMContentLoaded", () => {
     reportRoute();
     post({ type: "ready" });
+    reportedMode = undefined;
+    reportNotificationMode();
   });
 })();

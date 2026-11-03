@@ -468,7 +468,7 @@
             "Also notify when a thread finishes a turn.",
             "Never notify."
           ],
-          "description": "Native notifications for threads while the chat is hidden."
+          "description": "Threadside's own notifications for threads while the chat is hidden. They stay quiet while T3 Code's Thread notifications (T3 Code Settings → General) are on, which show as editor notifications too."
         },
         "threadside.syncTheme": {
           "type": "boolean",

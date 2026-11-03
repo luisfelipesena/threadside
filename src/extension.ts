@@ -50,6 +50,10 @@ class Controller implements vscode.Disposable {
   private scope: "workspace" | "all";
   /** The last text editor, so commands still find it after focus moves to the chat. */
   private lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
+  /** T3 Code's own "Thread notifications" choice, reported by the chat; while it notifies, Threadside does not. */
+  private t3NotificationMode: string | undefined;
+  /** When each T3 Code notification was last shown, so every open chat reporting the same one shows it once. */
+  private readonly shownNotifications = new Map<string, number>();
   /** Set once the user hides the docked chat, so the startup guard leaves it hidden. */
   private userHidSideView = false;
   /** Set when ⌘I hid the chat by maximizing the file group. */
@@ -379,6 +383,12 @@ class Controller implements vscode.Disposable {
         if (typeof message.threadId === "string" && message.environmentId === this.environment.descriptor?.environmentId) {
           void this.openThread(message.threadId, true);
         }
+        break;
+      case "notificationMode":
+        if (typeof message.mode === "string") this.t3NotificationMode = message.mode;
+        break;
+      case "notification":
+        this.showT3Notification(panel, message);
         break;
       case "ideContextRequest": {
         const snapshot = config().get("sendEditorContext", true) ? this.editorSnapshot() : undefined;
@@ -1079,8 +1089,31 @@ class Controller implements vscode.Disposable {
     item.show();
   }
 
+  /**
+   * A notification T3 Code raised in a chat (its own "Thread notifications"), shown natively. Opening
+   * it shows that chat and fires the notification's click there, so T3 Code opens the thread itself.
+   */
+  private showT3Notification(panel: ChatPanel, message: BridgeMessage): void {
+    const id = typeof message.id === "number" ? message.id : undefined;
+    const title = typeof message.title === "string" ? message.title : "";
+    const body = typeof message.body === "string" ? message.body : "";
+    if (id === undefined || !title) return;
+    const key = `${String(message.tag ?? "")}|${title}|${body}`;
+    const now = Date.now();
+    for (const [shown, at] of this.shownNotifications) if (now - at > 10_000) this.shownNotifications.delete(shown);
+    if (this.shownNotifications.has(key)) return;
+    this.shownNotifications.set(key, now);
+    void vscode.window.showInformationMessage(`T3: ${title}${body ? ` — ${body}` : ""}`, "Open thread").then((action) => {
+      if (action !== "Open thread") return;
+      panel.reveal(false);
+      panel.post({ type: "notificationClick", id });
+    });
+  }
+
   private notify(ids: ReadonlySet<string>): void {
     const mode = config().get<"attention" | "all" | "off">("notifications", "attention");
+    // T3 Code notifies from the chat while its own setting is on; the same event once is enough.
+    const t3Notifies = this.t3NotificationMode === "notifications" || this.t3NotificationMode === "notifications-and-sound";
     const scope = this.scopeProjects();
     const threads = this.environment.shell.threads;
     if (ids.size === 0) {
@@ -1096,7 +1129,7 @@ class Controller implements vscode.Disposable {
         continue;
       }
       this.lastSeen.set(id, thread);
-      if (mode === "off" || !before || (scope && !scope.has(thread.projectId))) continue;
+      if (mode === "off" || t3Notifies || !before || (scope && !scope.has(thread.projectId))) continue;
       const visible = [...this.panels].some((panel) => panel.threadId === id && panel.visible && vscode.window.state.focused);
       if (visible) continue;
       let message: string | undefined;

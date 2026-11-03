@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.13
+
+- T3 Code's **Thread notifications** work in the editor. A webview cannot ask for the browser's notification permission, so T3 Code saw it denied and the setting stayed Off. The chat now gets a notification permission that is always granted and hands each notification to the editor, which shows it with **Open thread**; that opens the chat it came from on the thread, through T3 Code's own click handling. Each chat starts with notifications on once, and a later choice in Settings stays. Every open chat reports the same event, so it is shown once. While T3 Code's notifications are on, Threadside's own (`threadside.notifications`) stay quiet.
+
 ## 0.3.12
 
 - ⌘I is a toggle: a docked chat on screen hides wherever the focus is, and a hidden one opens on the composer. Before, ⌘I from the code focused a visible chat, and in VS Code the focus did not reach the chat, so the next ⌘I never hid it.
