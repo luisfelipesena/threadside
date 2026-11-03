@@ -124,7 +124,9 @@ class Controller implements vscode.Disposable {
     }
     await this.dockOnRightOnce();
     // The chat shows while the connection is made, so Cursor's own pane is on screen as briefly as possible.
-    if (config().get("openChatOnStartup", true)) void this.showChatOnStartup();
+    // A window with no folder is not a project to chat about: it keeps Cursor's start page.
+    if (!vscode.workspace.workspaceFolders?.length) void this.hideChatInEmptyWindow();
+    else if (config().get("openChatOnStartup", true)) void this.showChatOnStartup();
     await this.environment.connect();
     // T3 Code's desktop app looks for builds every few minutes; GitHub allows 60 unauthenticated calls an hour.
     const updates = setInterval(() => void this.checkForUpdate(), 30 * 60_000);
@@ -143,6 +145,14 @@ class Controller implements vscode.Disposable {
       if ([...this.panels].some((panel) => panel.visible)) return;
       await this.openChat({ preserveFocus: true }).catch((error: Error) => log().warn(`Could not show the chat: ${error.message}`));
       if (sideLocation() === "side") await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+    }
+  }
+
+  /** The editor restores the docked chat with the layout, even in a new empty window; hide it there once. */
+  private async hideChatInEmptyWindow(): Promise<void> {
+    for (const wait of [300, 1500]) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (this.sideView?.visible) return this.hideSideView();
     }
   }
 

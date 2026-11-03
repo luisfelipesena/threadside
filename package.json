@@ -434,7 +434,7 @@
         "threadside.openChatOnStartup": {
           "type": "boolean",
           "default": true,
-          "description": "Show the chat when a window starts, in place of Cursor's own agent pane, which Cursor reopens on every start. The code keeps the focus."
+          "description": "Show the chat when a window with a folder starts, in place of Cursor's own agent pane, which Cursor reopens on every start. The code keeps the focus. A window with no folder keeps Cursor's start page."
         },
         "threadside.createProjectForFolder": {
           "type": "boolean",
