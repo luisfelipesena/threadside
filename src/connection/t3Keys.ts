@@ -10,6 +10,8 @@ const DEFAULTS: Record<string, string> = {
   "rightPanel.toggle": "mod+alt+b",
   "diff.toggle": "mod+d",
   "commandPalette.toggle": "mod+k",
+  "thread.next": "mod+shift+]",
+  "thread.previous": "mod+shift+[",
 };
 
 /**

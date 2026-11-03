@@ -1,6 +1,8 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
+import { resolveT3Home } from "../connection/discovery";
 import type { Environment } from "../connection/environment";
+import { t3Shortcut } from "../connection/t3Keys";
 import { log } from "../log";
 import type { AuthProxy } from "../proxy/authProxy";
 import { threadIdFromPath } from "../routes";
@@ -148,6 +150,7 @@ export class ChatPanel {
     this.post({
       type: "config",
       shortcuts: Object.keys(chatShortcuts()),
+      threadKeys: threadKeys(),
       compactChat: vscode.workspace.getConfiguration("threadside").get("compactChat", true),
       openFilesInEditor: vscode.workspace.getConfiguration("threadside").get("openFileLinksInEditor", true),
       matchEditorColors: vscode.workspace.getConfiguration("threadside").get("matchEditorColors", true),
@@ -213,6 +216,12 @@ export class ChatPanel {
     this.disposeEmitter.fire();
     this.disposeEmitter.dispose();
   }
+}
+
+/** T3 Code's own keys for the next and previous thread, so Ctrl+Tab follows a user's remapping. */
+function threadKeys(): { next?: string; previous?: string } {
+  const home = resolveT3Home(vscode.workspace.getConfiguration("threadside").get("t3Home", ""));
+  return { next: t3Shortcut("thread.next", home), previous: t3Shortcut("thread.previous", home) };
 }
 
 function themeKind(): "light" | "dark" {

@@ -8,6 +8,8 @@
   const BRIDGE = "threadside-bridge";
   const state = {
     shortcuts: [],
+    // Ctrl+Tab and Ctrl+Shift+Tab move between threads with T3 Code's own thread.next / thread.previous keys.
+    threadKeys: {},
     compact: true,
     compacted: false,
     openFilesInEditor: true,
@@ -195,6 +197,21 @@
     parts.push(event.key.toLowerCase());
     return parts.join("+");
   }
+  // T3 Code has no Ctrl+Tab binding; in the editor it is the usual key for the next tab, so here it
+  // moves between threads the way T3 Code's own thread.next / thread.previous keys do.
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!event.isTrusted || event.key !== "Tab" || !event.ctrlKey || event.metaKey || event.altKey) return;
+      const chordText = state.threadKeys[event.shiftKey ? "previous" : "next"];
+      if (!chordText) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      runShortcut(chordText);
+    },
+    true,
+  );
+
   window.addEventListener(
     "keydown",
     (event) => {
@@ -494,10 +511,11 @@
     if (typeof chordText !== "string" || !chordText) return;
     const parts = chordText.toLowerCase().split("+");
     const key = parts.pop();
+    const codes = { "[": "BracketLeft", "]": "BracketRight", "-": "Minus", "=": "Equal", ",": "Comma", ".": "Period", "/": "Slash", ";": "Semicolon", "'": "Quote", "`": "Backquote", "\\": "Backslash" };
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
     const init = {
       key: key.length === 1 ? key : key.charAt(0).toUpperCase() + key.slice(1),
-      code: key.length === 1 && /[a-z]/.test(key) ? "Key" + key.toUpperCase() : undefined,
+      code: key.length === 1 && /[a-z]/.test(key) ? "Key" + key.toUpperCase() : /^[0-9]$/.test(key) ? "Digit" + key : codes[key],
       metaKey: parts.includes("cmd") || parts.includes("meta") || (parts.includes("mod") && mac),
       ctrlKey: parts.includes("ctrl") || parts.includes("control") || (parts.includes("mod") && !mac),
       altKey: parts.includes("alt") || parts.includes("option"),
@@ -594,6 +612,7 @@
     switch (message.type) {
       case "config":
         state.shortcuts = Array.isArray(message.shortcuts) ? message.shortcuts : [];
+        state.threadKeys = message.threadKeys && typeof message.threadKeys === "object" ? message.threadKeys : {};
         state.compact = message.compactChat !== false;
         compactSidebar();
         state.openFilesInEditor = message.openFilesInEditor !== false;
