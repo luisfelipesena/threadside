@@ -393,6 +393,9 @@ class Controller implements vscode.Disposable {
       case "notification":
         this.showT3Notification(panel, message);
         break;
+      case "mediaSupport":
+        this.proxy.playsAac = message.aac === true;
+        break;
       case "ideContextRequest": {
         const snapshot = config().get("sendEditorContext", true) ? this.editorSnapshot() : undefined;
         const environmentId = this.environment.descriptor?.environmentId;

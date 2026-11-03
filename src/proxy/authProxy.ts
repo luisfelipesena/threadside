@@ -29,6 +29,8 @@ export class AuthProxy {
   private target: ConnectionTarget | undefined;
   private readonly allowedOrigins = new Set<string>();
   private readonly bridgeSource: string;
+  /** The editor decodes AAC itself (Cursor does, VS Code does not), so MP4 media passes through as is. */
+  playsAac = false;
   /** Read by the bridge before T3 Code's app starts; asked for on each page load. */
   boot: () => { projectScopeKeys?: string[] } = () => ({});
 
@@ -169,7 +171,9 @@ export class AuthProxy {
         return;
       }
       const status = upstreamRes.statusCode ?? 502;
-      if ((status === 200 || status === 206) && needsConversion(type) && canConvert()) {
+      // A MOV is usually HEVC (iPhone), which neither editor decodes.
+      // A MOV is usually HEVC (iPhone), which neither editor decodes.
+      if ((status === 200 || status === 206) && needsConversion(type) && (!this.playsAac || /quicktime/i.test(type)) && canConvert()) {
         upstreamRes.destroy();
         // T3 Code signs asset links with an expiry, so a validator names the file better than its URL.
         const size = String(upstreamRes.headers["content-range"] ?? upstreamRes.headers["content-length"] ?? "").replace(/^.*\//, "");

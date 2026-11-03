@@ -2,8 +2,9 @@ import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "node:fs";
 import type * as http from "node:http";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { hostname, tmpdir } from "node:os";
+import { delimiter, join } from "node:path";
+import * as vscode from "vscode";
 import { log } from "../log";
 
 /**
@@ -24,11 +25,25 @@ export function needsConversion(contentType: string): boolean {
 let ffmpegPath: string | null | undefined;
 function ffmpeg(): string | undefined {
   if (ffmpegPath === undefined) {
-    const fromPath = (process.env.PATH ?? "").split(":").map((dir) => join(dir, "ffmpeg"));
+    const name = process.platform === "win32" ? "ffmpeg.exe" : "ffmpeg";
+    const fromPath = (process.env.PATH ?? "").split(delimiter).map((dir) => join(dir, name));
     ffmpegPath = [...fromPath, ...FFMPEG].find((candidate) => existsSync(candidate)) ?? null;
-    if (!ffmpegPath) log().info("ffmpeg not found; AAC, HEVC and other media the editor cannot decode will not play in the chat. Install ffmpeg to convert it.");
+    if (!ffmpegPath) {
+      log().info("ffmpeg not found; AAC, HEVC and other media the editor cannot decode will not play in the chat. Install ffmpeg to convert it.");
+      offerFfmpeg();
+    }
   }
   return ffmpegPath ?? undefined;
+}
+
+function offerFfmpeg(): void {
+  const install =
+    process.platform === "darwin" ? "brew install ffmpeg" : process.platform === "win32" ? "winget install ffmpeg" : "sudo apt install ffmpeg (or your distribution's package)";
+  void vscode.window
+    .showWarningMessage(`Videos in the chat need ffmpeg to play with sound in this editor. Install it on ${hostname()} with \`${install}\`, then reload the window.`, "Copy command")
+    .then((choice) => {
+      if (choice === "Copy command") void vscode.env.clipboard.writeText(install);
+    });
 }
 
 export function canConvert(): boolean {

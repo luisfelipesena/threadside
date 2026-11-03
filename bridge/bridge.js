@@ -851,6 +851,8 @@
   document.addEventListener("DOMContentLoaded", () => {
     reportRoute();
     post({ type: "ready" });
+    // VS Code's media library lacks AAC; Cursor's has it. The editor converts only what this one cannot play.
+    post({ type: "mediaSupport", aac: document.createElement("video").canPlayType('audio/mp4; codecs="mp4a.40.2"') !== "" });
     reportedMode = undefined;
     reportNotificationMode();
   });
