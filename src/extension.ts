@@ -93,6 +93,8 @@ class Controller implements vscode.Disposable {
         } else if (status.kind === "needs-pairing") {
           this.proxy.setTarget(undefined);
         }
+        // A tab still waiting for the first connection swaps "Connecting…" for the Connect page.
+        if (status.kind === "needs-pairing" || status.kind === "error") for (const panel of this.panels) if (!panel.renderedFor) void panel.render();
         this.updateStatus();
       }),
       this.environment.shell.onDidChange((ids) => {

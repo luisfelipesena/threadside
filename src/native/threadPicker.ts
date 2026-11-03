@@ -19,12 +19,19 @@ const SECTIONS: Array<{ section: ThreadSection; label: string; icon: string }> =
 const LIMIT = 400;
 
 /**
- * The thread picker's rows: this window's threads in T3 Code's own sections, newest first, then the
- * other projects' threads. Each row says its state with an icon and words, and carries Settle (or
- * Unsettle) and Open in New Tab buttons.
+ * The thread picker's rows, by last activity. With no search they sit in T3 Code's own sections for
+ * this window's projects, then the other projects'; while searching, every thread is one list, so the
+ * most recent match comes first. Each row says its state with an icon and words, and carries Settle
+ * (or Unsettle) and Open in New Tab buttons.
  */
-export function threadPickerItems(threads: ThreadShell[], scope: ReadonlySet<string> | undefined, projectTitle: (id: string) => string | undefined): ThreadItem[] {
+export function threadPickerItems(
+  threads: ThreadShell[],
+  scope: ReadonlySet<string> | undefined,
+  projectTitle: (id: string) => string | undefined,
+  searching = false,
+): ThreadItem[] {
   const sorted = [...threads].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  if (searching) return sorted.map((thread) => toItem(thread, projectTitle));
   const inScope = scope ? sorted.filter((thread) => scope.has(thread.projectId)) : sorted;
   const others = scope ? sorted.filter((thread) => !scope.has(thread.projectId)) : [];
   const items: ThreadItem[] = [];
