@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.10
+
+- The chat comes back on startup when Cursor switches the Secondary Side Bar to its own agent a few seconds after a window opens. Cursor still reports the chat's view as visible behind its agent, so the chat's tab is brought forward at fixed points of startup, with the focus returned to the code; a chat you hide stays hidden.
+- ⌥⌘E in VS Code maximizes the Secondary Side Bar in place when the chat is docked there. Cursor has no such command for extension views (its own maximize brings its agent back), so there the thread still opens in a full editor tab.
+
 ## 0.3.9
 
 - In the chat, Ctrl+Tab and Ctrl+Shift+Tab move to the next and previous thread, like T3 Code's own ⇧⌘] and ⇧⌘[ (and following any remapping of those in T3 Code's keybindings).

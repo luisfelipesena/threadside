@@ -50,6 +50,8 @@ class Controller implements vscode.Disposable {
   private scope: "workspace" | "all";
   /** The last text editor, so commands still find it after focus moves to the chat. */
   private lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
+  /** Set once the user hides the docked chat, so the startup guard leaves it hidden. */
+  private userHidSideView = false;
   /** Set when ⌘I hid the chat by maximizing the file group. */
   private chatHidden = false;
   /** The docked chat, once the editor has shown its view. */
@@ -140,11 +142,18 @@ class Controller implements vscode.Disposable {
    * and the code keeps the focus.
    */
   private async showChatOnStartup(): Promise<void> {
-    for (const wait of [200, 1500, 4000]) {
-      await new Promise((resolve) => setTimeout(resolve, wait));
-      if ([...this.panels].some((panel) => panel.visible)) return;
+    if (sideLocation() !== "side") {
       await this.openChat({ preserveFocus: true }).catch((error: Error) => log().warn(`Could not show the chat: ${error.message}`));
-      if (sideLocation() === "side") await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+      return;
+    }
+    // Cursor switches its sidebar to its own agent a few seconds after start, and the chat's view still
+    // reports itself visible behind it, so the chat's tab is brought forward at fixed points of startup.
+    // Focus goes back to the code each time; a chat the user hid stays hidden.
+    for (const at of [300, 2500, 6000]) {
+      await new Promise((resolve) => setTimeout(resolve, at));
+      if (this.userHidSideView) return;
+      await vscode.commands.executeCommand(`${SIDE_VIEW_ID}.focus`).then(undefined, (error: Error) => log().warn(`Could not show the chat: ${error.message}`));
+      await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
     }
   }
 
@@ -533,8 +542,12 @@ class Controller implements vscode.Disposable {
       chat.insertMentions(files.slice(0, 50).map((file) => mentionFor(this.mentionPath(file.fsPath))));
     });
     command("threadside.toggleMaximize", async () => {
-      // The docked chat opens its thread as a full editor tab; a tab maximizes its group.
-      if (this.activePanel?.isSideView || (sideLocation() === "side" && !this.activePanel?.panel?.active)) return this.popOut();
+      // The docked chat fills the window where it sits when that is the Secondary Side Bar; elsewhere its
+      // thread opens as a full editor tab. A tab maximizes its group.
+      if (this.activePanel?.isSideView || (sideLocation() === "side" && !this.activePanel?.panel?.active)) {
+        if (await this.maximizeSideBar()) return;
+        return this.popOut();
+      }
       if (!this.activePanel?.panel?.active) await this.openChat();
       await vscode.commands.executeCommand("workbench.action.toggleMaximizeEditorGroup");
     });
@@ -639,6 +652,7 @@ class Controller implements vscode.Disposable {
    * elsewhere opens Cursor's own chat there, so the container that worked last time goes first.
    */
   private async hideSideView(): Promise<void> {
+    this.userHidSideView = true;
     const side = this.sideView;
     const learned = this.context.globalState.get<string>(CLOSER_KEY);
     const closers = ["workbench.action.closeSidebar", "workbench.action.toggleAuxiliaryBar", "workbench.action.closePanel"];
@@ -652,6 +666,18 @@ class Controller implements vscode.Disposable {
       if (closer === "workbench.action.toggleAuxiliaryBar") await vscode.commands.executeCommand(closer);
     }
     await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
+  }
+
+  /**
+   * Toggles the Secondary Side Bar to full width when the docked chat is shown there (the bar that last
+   * hid it). Cursor has no such command for extension views (its own maximize brings its agent back).
+   */
+  private async maximizeSideBar(): Promise<boolean> {
+    if (!this.sideView?.visible || this.context.globalState.get(CLOSER_KEY) !== "workbench.action.toggleAuxiliaryBar") return false;
+    const available = new Set(await vscode.commands.getCommands(true));
+    if (!available.has("workbench.action.toggleMaximizedAuxiliaryBar")) return false;
+    await vscode.commands.executeCommand("workbench.action.toggleMaximizedAuxiliaryBar");
+    return true;
   }
 
   /** Opens the docked chat's thread as an editor tab, for a wide view or to keep it beside another thread. */
