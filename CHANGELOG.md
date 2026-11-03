@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.17
+
+- Videos and audio in the chat play with sound in VS Code. Its media library has no AAC, HEVC, Opus or WebM decoders, so an ordinary MP4 showed a frozen player with no sound. Threadside converts such media once with `ffmpeg` on the machine that runs it, copying H.264 video as it is and turning the sound into MP3, and serves the copy with seeking. Without `ffmpeg` the log says so and the media stays as T3 Code sends it.
+- A file link without a line (an image, a PDF) opens in the editor's own viewer for it. Before, the editor tried to open it as text and the click did nothing.
+- A video or audio the chat cannot play is reported in the log with the player's error.
+
 ## 0.3.16
 
 - A notification about the thread already on screen is not shown: while the chat showing that thread is visible in the focused window, T3 Code's notifications and Threadside's own stay quiet for it. In another window, with the chat hidden, on another thread, or with the editor in the background, it still shows.
