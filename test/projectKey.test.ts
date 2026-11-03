@@ -12,6 +12,6 @@ test("a repository project is filtered by its canonical key, preferring the orig
 });
 
 test("a folder without a repository is filtered by environment and path", () => {
-  assert.equal(sidebarProjectKey({ workspaceRoot: "/Users/me/Development/MetaCto/", repositoryIdentity: null }, env), `${env}:/Users/me/Development/MetaCto`);
+  assert.equal(sidebarProjectKey({ workspaceRoot: "/Users/me/Development/Work/", repositoryIdentity: null }, env), `${env}:/Users/me/Development/Work`);
   assert.equal(sidebarProjectKey({ workspaceRoot: "C:/Code/App" }, env), `${env}:c:\\code\\app`);
 });
