@@ -517,20 +517,27 @@
     style.textContent = ":root, :root.dark { " + rules + " }";
   }
 
-  // Answers a picker that a shortcut opened (such as chat.new's project list) by typing and choosing.
+  // Answers a picker that a shortcut opened (such as chat.new's project list) by choosing the row
+  // titled `text`. The palette clears its query as it mounts, so it types only once the rows are
+  // there, and it picks only an exact title: with no exact match the palette stays open for the user
+  // rather than starting the thread in the wrong project.
   function pickInPalette(text, attempt) {
+    attempt = attempt || 0;
     const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement)) {
-      if ((attempt || 0) < 20) setTimeout(() => pickInPalette(text, (attempt || 0) + 1), 50);
+    if (!(input instanceof HTMLInputElement) || !document.querySelector('[data-slot="command-item"]')) {
+      if (attempt < 60) setTimeout(() => pickInPalette(text, attempt + 1), 50);
       return;
     }
-    input.focus();
-    document.execCommand("insertText", false, text);
-    setTimeout(() => {
-      const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true, cancelable: true };
-      input.dispatchEvent(new KeyboardEvent("keydown", init));
-      input.dispatchEvent(new KeyboardEvent("keyup", init));
-    }, 150);
+    if (input.value !== text) {
+      input.focus();
+      input.select();
+      document.execCommand("insertText", false, text);
+    }
+    const row = [...document.querySelectorAll('[data-slot="command-item"]')].find(
+      (item) => item.querySelector(".truncate")?.textContent.trim() === text,
+    );
+    if (row) row.click();
+    else if (attempt < 60) setTimeout(() => pickInPalette(text, attempt + 1), 50);
   }
 
   // Beside the code the column is narrow: start with T3 Code's own thread sidebar closed so the

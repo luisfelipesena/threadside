@@ -110,7 +110,18 @@ class Controller implements vscode.Disposable {
     }
     await this.environment.connect();
     await this.dockOnRightOnce();
-    if (config().get("openChatOnStartup", false) && this.panels.size === 0) await this.openChat({ preserveFocus: true });
+    if (config().get("openChatOnStartup", true) && this.panels.size === 0) await this.showChatOnStartup();
+  }
+
+  /**
+   * Cursor reopens its own agent pane in the right-hand sidebar on every start, with no setting to
+   * stop it. Once the window has restored, the chat takes that place, and the code keeps the focus.
+   */
+  private async showChatOnStartup(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    if (this.panels.size > 0) return;
+    await this.openChat({ preserveFocus: true });
+    if (sideLocation() === "side") await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
   }
 
   /**
@@ -134,12 +145,13 @@ class Controller implements vscode.Disposable {
   }
 
   private adoptSideView(view: vscode.WebviewView, state: { path?: string } | undefined): void {
-    const chat = new ChatPanel(view, this.chatHost(), state ?? { path: this.context.workspaceState.get<string>("threadside.sidePath") });
+    const saved = state?.path ?? this.context.workspaceState.get<string>("threadside.sidePath");
+    // A thread comes back as it was. A draft or an empty chat starts over in the repository this window
+    // is coding in, so a draft another project left behind never opens here.
+    const thread = saved && saved !== "/" && !saved.startsWith("/draft/") ? saved : undefined;
+    const chat = new ChatPanel(view, this.chatHost(), { path: thread ?? "/" });
     this.sideView = chat;
-    // A fresh docked chat starts a draft in the repository this window is coding in.
-    if (!state?.path && !this.context.workspaceState.get<string>("threadside.sidePath")) {
-      chat.onFirstReady = () => this.runT3Shortcut(chat, "chat.new", this.workspaceProject()?.title);
-    }
+    if (!thread) chat.onFirstReady = () => this.startDraft(chat);
     chat.onDidDispose(() => {
       if (this.sideView === chat) this.sideView = undefined;
     });
@@ -238,7 +250,7 @@ class Controller implements vscode.Disposable {
     );
     const chat = this.adopt(new ChatPanel(panel, this.chatHost(), { path: options.path ?? "/" }));
     // A fresh chat with no thread starts a draft in the repository this window is coding in.
-    if (!options.path) chat.onFirstReady = () => this.runT3Shortcut(chat, "chat.new", this.workspaceProject()?.title);
+    if (!options.path) chat.onFirstReady = () => this.startDraft(chat);
     // Like Cursor's chat: a narrow column on the right that keeps file tabs out of it.
     if (beside && groupsBefore === 1 && vscode.window.tabGroups.all.length === 2) {
       await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.64 }, { size: 0.36 }] });
@@ -619,6 +631,12 @@ class Controller implements vscode.Disposable {
     const project = target ?? (currentId ? this.environment.shell.projects.get(currentId) : undefined) ?? this.workspaceProject();
     // T3 Code's new thread opens its project picker; answering it keeps the draft in the right repository.
     this.runT3Shortcut(chat, "chat.new", project?.title);
+  }
+
+  /** Starts a draft in this window's project; a window with no T3 project keeps T3 Code's start page. */
+  private startDraft(chat: ChatPanel): void {
+    const project = this.workspaceProject();
+    if (project) this.runT3Shortcut(chat, "chat.new", project.title);
   }
 
   /** Runs a T3 Code shortcut in the chat; `pick` answers the picker it opens, such as the project list. */

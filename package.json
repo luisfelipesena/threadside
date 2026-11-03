@@ -423,8 +423,8 @@
         },
         "threadside.openChatOnStartup": {
           "type": "boolean",
-          "default": false,
-          "description": "Reopen the chat beside the editor when a window starts and no chat tab was restored."
+          "default": true,
+          "description": "Show the chat when a window starts, in place of Cursor's own agent pane, which Cursor reopens on every start. The code keeps the focus."
         },
         "threadside.threadScope": {
           "type": "string",

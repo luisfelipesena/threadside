@@ -82,7 +82,7 @@ while (queue.length && seen.size < 400) {
     if (!seen.has(next)) queue.push(next);
   }
 }
-for (const marker of ["composer-editor", "chat-markdown-file-link", "application/x-t3code-composer-mention", "Expand composer", "prefers-color-scheme", "sidebar-wrapper", "data-sidebar-state", "data-thread-item", "t3code:ui-state:v1", "sidebarProjectScopeKeys", "data-composer-command-drawer", "t3code:client-settings:v1", "x-t3-context-fragment+json", "t3-context://v1/", "data-surface-launcher-keys"]) {
+for (const marker of ["composer-editor", "chat-markdown-file-link", "application/x-t3code-composer-mention", "Expand composer", "prefers-color-scheme", "sidebar-wrapper", "data-sidebar-state", "data-thread-item", "t3code:ui-state:v1", "sidebarProjectScopeKeys", "data-composer-command-drawer", "t3code:client-settings:v1", "x-t3-context-fragment+json", "t3-context://v1/", "data-surface-launcher-keys", "command-item"]) {
   check(bundle.includes(marker), `web bundle still contains "${marker}"`);
 }
 

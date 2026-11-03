@@ -10,7 +10,7 @@ The chat is T3 Code's own web app, served by your server, so every provider, acc
 
 ## What you get
 
-- **The full T3 Code chat, docked on the right.** On first run the chat moves to the Secondary Side Bar, next to Cursor's own agent, and stays there across files and windows, in the editor's theme, background and fonts. <kbd>⌘I</kbd> shows or hides it and <kbd>⌘W</kbd> closes it (after a terminal or panel open in T3 Code); the title bar has **New Thread**, **Search Threads** and **Open in Editor Tab**.
+- **The full T3 Code chat, docked on the right.** On first run the chat moves to the Secondary Side Bar, next to Cursor's own agent, and stays there across files and windows, in the editor's theme, background and fonts. <kbd>⌘I</kbd> shows or hides it and <kbd>⌘W</kbd> closes it (after a terminal or panel open in T3 Code); the title bar has **New Thread**, **Search Threads** and **Open in Editor Tab**. A new chat starts in the project of the file you are editing.
 - **Several threads at once.** The docked chat holds the thread you are on; **Open Thread in Editor Tab** (or a middle click on a thread in the list) opens another one as an editor tab, which you can split beside your code or beside other threads. Editor tabs are restored after a reload.
 - **One thread list, T3 Code's own, filtered to this window.** The list starts filtered to the projects open in the window (a folder that holds several projects shows all of them); pick another filter in the list and it stays. Pin, settle, snooze and drag work as in the app. <kbd>⌘B</kbd> opens the list; <kbd>⇧⌘H</kbd> searches every thread from anywhere.
 - **Copy and paste that work.** <kbd>⌘V</kbd> pastes text, images and files into the composer, <kbd>⌘C</kbd>, <kbd>⌘X</kbd>, <kbd>⌘A</kbd> and <kbd>⌘Z</kbd> work in the chat, and copy buttons write to your clipboard, over Remote-SSH too.
@@ -85,6 +85,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.chatLocation` | `side` | Dock the chat in a side bar (the Secondary Side Bar on first run), or open it as an editor tab beside the code or in the active group. |
 | `threadside.threadScope` | `workspace` | Thread search lists this window's projects first, or every project equally. |
 | `threadside.sendEditorContext` | `true` | Send the focused file, cursor or selection, open files and Problems with a message, as a chip. |
+| `threadside.openChatOnStartup` | `true` | Show the chat when a window starts, in place of the agent pane Cursor reopens on every start. The code keeps the focus. |
 | `threadside.compactChat` | `true` | Start the narrow chat with T3 Code's thread sidebar closed. |
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
 | `threadside.matchEditorColors` | `true` | Use the editor's colors and fonts in the chat. |
