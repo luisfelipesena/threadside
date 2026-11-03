@@ -127,17 +127,18 @@
   }
   setInterval(reportNotificationMode, 3000);
 
-  // T3 Code starts with notifications off because a browser has to grant them first; in the editor
-  // they are always granted, so each chat starts with them on, once. A later choice in Settings stays.
+  // T3 Code starts with notifications off because a browser has to grant them first, and saves that
+  // "off" with its other settings. In the editor they were never grantable before, so a saved "off" is
+  // not a choice: each chat turns them on once. A choice made in Settings afterwards stays.
   if (trustedParent) enableNotificationsOnce();
   function enableNotificationsOnce() {
     try {
-      if (localStorage.getItem("threadside:notificationsDefault")) return;
+      if (localStorage.getItem("threadside:notificationsDefault:v2")) return;
       const raw = localStorage.getItem("t3code:client-settings:v1");
       const settings = raw ? JSON.parse(raw) : {};
-      if (!settings.notificationMode) settings.notificationMode = "notifications";
+      if (!settings.notificationMode || settings.notificationMode === "off") settings.notificationMode = "notifications";
       localStorage.setItem("t3code:client-settings:v1", JSON.stringify(settings));
-      localStorage.setItem("threadside:notificationsDefault", "1");
+      localStorage.setItem("threadside:notificationsDefault:v2", "1");
     } catch {
       // storage unavailable: T3 Code keeps its own default
     }

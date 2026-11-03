@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.14
+
+- T3 Code's Thread notifications turn on in chats that already ran 0.3.13. T3 Code saves its default "off" along with its other settings, and in the editor that "off" was never a choice (the permission could not be granted before 0.3.13), so each chat turns notifications on once more. A choice made in Settings afterwards stays.
+
 ## 0.3.13
 
 - T3 Code's **Thread notifications** work in the editor. A webview cannot ask for the browser's notification permission, so T3 Code saw it denied and the setting stayed Off. The chat now gets a notification permission that is always granted and hands each notification to the editor, which shows it with **Open thread**; that opens the chat it came from on the thread, through T3 Code's own click handling. Each chat starts with notifications on once, and a later choice in Settings stays. Every open chat reports the same event, so it is shown once. While T3 Code's notifications are on, Threadside's own (`threadside.notifications`) stay quiet.
