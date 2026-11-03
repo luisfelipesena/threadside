@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16
+
+- A notification about the thread already on screen is not shown: while the chat showing that thread is visible in the focused window, T3 Code's notifications and Threadside's own stay quiet for it. In another window, with the chat hidden, on another thread, or with the editor in the background, it still shows.
+
 ## 0.3.15
 
 - Notifications follow the project filter of T3 Code's thread list in each window. A window filtered to its own project (the default) only notifies about that project; pick several projects or All projects in the list and it notifies about those. This applies to T3 Code's Thread notifications and to Threadside's own. The log notes each T3 Code notification and whether it was shown.
