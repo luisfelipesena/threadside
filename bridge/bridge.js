@@ -203,6 +203,15 @@
     }, 0);
   });
 
+  // T3 Code's desktop app opens Settings from its menu (⌘,); in the editor that key never reaches the
+  // menu, so ⌘, and ⌘. open T3 Code's Settings here.
+  window.addEventListener("keydown", (event) => {
+    const key = chord(event);
+    if (!event.isTrusted || (key !== "mod+," && key !== "mod+.")) return;
+    event.preventDefault();
+    if (!/^\/settings(\/|$)/.test(location.pathname)) navigate("/settings");
+  });
+
   // Copy, cut, paste, select all, undo and redo are menu commands in the editor. They reach the
   // webview's outer page, never this frame, so here the keys do nothing unless the bridge runs them.
   // The browser's own paste keeps images and files from the clipboard.
