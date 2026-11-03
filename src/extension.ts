@@ -158,9 +158,9 @@ class Controller implements vscode.Disposable {
 
   private adoptSideView(view: vscode.WebviewView, state: { path?: string } | undefined): void {
     const saved = state?.path ?? this.context.workspaceState.get<string>("threadside.sidePath");
-    // A thread comes back as it was. A draft or an empty chat starts over in the repository this window
+    // A thread comes back as it was. A draft, Settings or an empty chat starts over in the repository this window
     // is coding in, so a draft another project left behind never opens here.
-    const thread = saved && saved !== "/" && !saved.startsWith("/draft/") ? saved : undefined;
+    const thread = saved && /^\/[^/]+\/[^/]+$/.test(saved) && !/^\/(draft|settings)\//.test(saved) ? saved : undefined;
     const chat = new ChatPanel(view, this.chatHost(), { path: thread ?? "/" });
     this.sideView = chat;
     if (!thread) chat.onFirstReady = () => this.startDraft(chat);
