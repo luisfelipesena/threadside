@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.3
+
+- T3 Code updates from the editor, nightly included. Every 30 minutes Threadside compares the server's version with T3 Code's releases on the same channel; a newer build shows an up arrow in the status bar and one **Update** offer. **T3: Update T3 Code** updates the server with T3 Code's own update call (the desktop app installs and relaunches when it runs the server), warns when threads are working, and the chat reloads into the new UI once the server is back. `threadside.checkForUpdates` turns it off.
+- ⌘W in the chat closes it, like any editor tab: an editor-tab chat closes, the docked chat hides. A terminal or the right panel open in T3 Code still closes first, as in T3 Code.
+- A new chat starts in the right project. The project picker is answered only with the exact project of the file you are editing (or of the window's folder), after T3 Code's palette has settled; before, a fast palette could start the thread in the most recent project instead. A window with no T3 project keeps T3 Code's start page.
+- A docked chat that held a draft starts over in the window's project when the window reopens; threads still come back as they were.
+- The chat shows when a window starts, in place of the agent pane Cursor reopens on every start (Cursor has no setting for that pane). The code keeps the focus. `threadside.openChatOnStartup` turns it off.
+
 ## 0.3.2
 
 - The chat sees the editor. Each message you send carries a chip with the file in focus, the cursor or selected lines, what is on screen, the other open files and the Problems the editor shows (errors first, with their source and code). Ask "what error is the editor showing?" and the agent knows. It is read when you press Enter, so it is never stale, and attached again in a thread only after it changes. An open `@` or `/` menu still takes Enter. `threadside.sendEditorContext` turns it off.
