@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.18
+
+- ⌘1 to ⌘9, the arrows and Enter work in T3 Code's project picker when Threadside opens it (the New Thread button, ⌘N from the code, a new chat). The picker opened in the chat while the keyboard stayed with the editor, so ⌘1 and ⌘2 switched editor groups instead of picking a project. The chat now takes the keyboard whenever Threadside runs one of T3 Code's shortcuts in it.
+
 ## 0.3.17
 
 - Videos and audio in the chat play with sound in VS Code. Its media library has no AAC, HEVC, Opus or WebM decoders, so an ordinary MP4 showed a frozen player with no sound. Threadside converts such media once with `ffmpeg` on the machine that runs it, copying H.264 video as it is and turning the sound into MP3, and serves the copy with seeking. Without `ffmpeg` the log says so and the media stays as T3 Code sends it.
