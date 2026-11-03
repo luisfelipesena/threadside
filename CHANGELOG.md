@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.5
+
+- **T3: Update T3 Code** works from the editor. Sessions now include `environment:maintain`, the scope T3 Code requires for server updates; a local session without it is replaced on the next connect, and a paired one asks you to connect again.
+- A new chat starts in the T3 project whose folder is the window's folder. A window on a folder that holds other projects (a `MetaCto` window with `MetaCto/nemo` open) stays in its own project instead of the open file's.
+- The chat shows as soon as a window opens, while it connects, and again if Cursor's restore puts its agent pane back. Before, Cursor's pane stayed up until the connection finished.
+- Thread search (⇧⌘H) keeps the most recent activity first while you type, across sections, instead of ranking by how well the title matches.
+
 ## 0.3.4
 
 - ⌘, or ⌘. in the chat opens T3 Code's Settings, as ⌘, does in T3 Code's desktop app (its menu never sees the key inside the editor).
