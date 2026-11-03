@@ -89,6 +89,7 @@ export const CLIENT_SCOPES = [
   "orchestration:operate",
   "settings:write",
   "providers:manage",
+  "environment:maintain",
   "preview:operate",
   "diagnostics:read",
   "terminal:read",

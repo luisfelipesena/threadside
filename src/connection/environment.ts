@@ -19,6 +19,8 @@ interface StoredCredential {
   token: string;
   expiresAt?: number;
   sessionId?: string;
+  /** Scopes requested when the token was issued; older credentials lack it. */
+  scopes?: readonly string[];
   httpBaseUrl: string;
   source: "local-cli" | "pairing";
 }
@@ -209,7 +211,9 @@ export class Environment implements vscode.Disposable {
     if (stored && new URL(stored.httpBaseUrl).origin !== new URL(target.httpBaseUrl).origin) stored = undefined;
     const renewable = target.local && (!stored || stored.source === "local-cli");
     const expiring = stored?.expiresAt !== undefined && stored.expiresAt - Date.now() < RENEW_BEFORE_MS;
-    if (renewable && (!stored || expiring)) {
+    // A session issued before a scope was added (such as `environment:maintain`) is replaced.
+    const missingScope = CLIENT_SCOPES.some((scope) => !stored?.scopes?.includes(scope));
+    if (renewable && (!stored || expiring || missingScope)) {
       const t3Home = resolveT3Home(config().get("t3Home", ""));
       const cli = findCli(t3Home);
       if (!cli) {
@@ -222,6 +226,7 @@ export class Environment implements vscode.Disposable {
         token: issued.token,
         expiresAt: issued.expiresAt,
         sessionId: issued.sessionId,
+        scopes: CLIENT_SCOPES,
         httpBaseUrl: target.httpBaseUrl,
         source: "local-cli",
       };

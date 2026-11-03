@@ -693,12 +693,18 @@ class Controller implements vscode.Disposable {
     if (answer !== "Update") return;
     await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Updating T3 Code to ${target}` }, async (progress) => {
       let result: { method?: string; desktopUpdateToken?: string } | undefined;
-      await this.environment.stream("server.updateServerWithProgress", { targetVersion: target, ...(continues ? { continueRunningThreads: true } : {}) }, (values) => {
-        for (const event of values as Array<{ type?: string; stage?: string; result?: typeof result }>) {
-          if (event.type === "progress") progress.report({ message: event.stage === "downloading" ? "Downloading…" : "Installing…" });
-          if (event.type === "complete") result = event.result;
-        }
-      });
+      await this.environment
+        .stream("server.updateServerWithProgress", { targetVersion: target, ...(continues ? { continueRunningThreads: true } : {}) }, (values) => {
+          for (const event of values as Array<{ type?: string; stage?: string; result?: typeof result }>) {
+            if (event.type === "progress") progress.report({ message: event.stage === "downloading" ? "Downloading…" : "Installing…" });
+            if (event.type === "complete") result = event.result;
+          }
+        })
+        .catch((error: Error) => {
+          // Sessions paired before 0.3.5 lack the scope; a local session is reissued with it on connect.
+          if (!error.message.includes("environment:maintain")) throw error;
+          throw new Error(`This editor's session on ${descriptor.label} cannot update T3 Code. Run “T3: Connect to T3 Code…” to get a new one, then update again.`);
+        });
       progress.report({ message: "Restarting…" });
       // The desktop app relaunches into the new build once told to; the connection drops on the way.
       if (result?.method === "desktop-app" && result.desktopUpdateToken) {

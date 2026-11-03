@@ -5,7 +5,7 @@ Threadside is a client of your own T3 Code server. It never talks to any other s
 ## What it stores
 
 - One scoped bearer session per T3 Code environment, in the editor's **SecretStorage** (the OS keychain). Nothing is written to settings, workspace files or logs.
-- Sessions are issued with the scopes a chat client needs (`orchestration`, `terminal`, `filesystem`, `source-control`, `settings`, `providers`, `preview`, `diagnostics`). Access management (`access:*`) and relay control (`relay:*`) are never requested.
+- Sessions are issued with the scopes a chat client needs (`orchestration`, `terminal`, `filesystem`, `source-control`, `settings`, `providers`, `preview`, `diagnostics`, and `environment:maintain` for server updates). Access management (`access:*`) and relay control (`relay:*`) are never requested.
 - Each session is listed in T3 Code under **Settings → Sharing & access** as `Threadside in <editor> (<host>)` and can be revoked there at any time. **T3: Disconnect and Forget Credentials** deletes it from the editor and revokes it when the `t3` CLI is available.
 
 ## How the chat is served
