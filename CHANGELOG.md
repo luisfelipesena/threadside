@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.7
+
+- ⌘I hides the chat without opening Cursor's own chat. The chat docked in the Primary Side Bar (moved to the right) used to be hidden by toggling the Secondary Side Bar first, which showed Cursor's agent pane there; the bar that worked last time now goes first.
+- A window on a repository T3 Code does not know yet adds it as a project (`threadside.createProjectForFolder`, on by default), so the chat starts there instead of in the last project T3 Code used.
+- A docked chat restored on a thread from another project starts a draft in the window's project instead.
+- The managed shortcut block unbinds Cursor's "Open Chat" (`composer.startComposerPrompt`) on ⌘I itself.
+
 ## 0.3.6
 
 - T3 Code's Working section starts off in the chat, which has no room for it in a narrow docked list. Each chat keeps its own T3 Code settings; this is set once, so turning it back on in Settings stays.
