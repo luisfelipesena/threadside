@@ -11,6 +11,7 @@
     compact: true,
     compacted: false,
     openFilesInEditor: true,
+    sendEditorContext: true,
     theme: readCookie("threadside_theme_" + location.port) === "light" ? "light" : "dark",
   };
   // The editor's webview that hosts this frame; nothing else may talk to the bridge.
@@ -221,6 +222,82 @@
         throw error;
       });
     };
+  }
+
+  // Editor context, like Cursor's active-file pill: when a message is sent, the file in focus, the
+  // cursor or selection and the Problems the editor shows ride along as one of T3 Code's own context
+  // chips. It is read from the editor at send time, and attached again in a thread only once it changed.
+  const CONTEXT_MIME = "web application/x-t3-context-fragment+json";
+  const sentContext = new Map();
+  let pendingSend = null;
+  let sendCount = 0;
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!trustedParent || !state.sendEditorContext || !event.isTrusted || event.key !== "Enter") return;
+      if (event.isComposing || event.keyCode === 229 || event.altKey || event.shiftKey) return;
+      const editor = composer();
+      if (!editor || !(event.target instanceof Node) || !editor.contains(event.target)) return;
+      // An open @ or / menu takes Enter for its own pick.
+      if (pendingSend || document.querySelector("[data-composer-command-drawer]")) return;
+      const text = editor.innerText || "";
+      if (!text.trim() || !sendsOnEnter(event, text)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const id = "send-" + ++sendCount;
+      const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, metaKey: event.metaKey, ctrlKey: event.ctrlKey, bubbles: true, cancelable: true };
+      pendingSend = { id, target: event.target, init, timer: setTimeout(() => finishSend(null), 400) };
+      post({ type: "ideContextRequest", requestId: id });
+    },
+    true,
+  );
+
+  // T3 Code's send setting: Enter, ⌘Enter, or ⌘Enter once the draft has several lines.
+  function sendsOnEnter(event, text) {
+    let shortcut = "enter";
+    try {
+      shortcut = JSON.parse(localStorage.getItem("t3code:client-settings:v1") || "{}").sendShortcut || "enter";
+    } catch {
+      // unreadable settings: T3 Code's default
+    }
+    const needsModifier = shortcut === "mod-enter" || (shortcut === "mod-enter-multiline" && /\n/.test(text.trim()));
+    return !needsModifier || event.metaKey || event.ctrlKey;
+  }
+
+  function finishSend(context) {
+    const send = pendingSend;
+    if (!send) return;
+    pendingSend = null;
+    clearTimeout(send.timer);
+    const thread = location.pathname;
+    let attached = false;
+    if (context && typeof context.text === "string" && sentContext.get(thread) !== context.text) {
+      attached = attachContext(send.target, context);
+      if (attached) sentContext.set(thread, context.text);
+    }
+    // The chip reaches the draft through React state; send once it has rendered.
+    setTimeout(() => send.target.dispatchEvent(new KeyboardEvent("keydown", send.init)), attached ? 60 : 0);
+  }
+
+  function attachContext(target, context) {
+    const contextId = "ide-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    const record = {
+      version: 1,
+      kind: "terminal",
+      contextId,
+      label: context.label,
+      terminalId: "threadside-editor",
+      terminalLabel: context.label,
+      lineStart: 1,
+      lineEnd: context.lines,
+      text: context.text,
+    };
+    const data = new DataTransfer();
+    data.setData("text/plain", " [" + context.label + "](t3-context://v1/terminal/" + contextId + ")");
+    data.setData(CONTEXT_MIME, JSON.stringify({ version: 1, source: { environmentId: context.environmentId }, records: [record] }));
+    const paste = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+    target.dispatchEvent(paste);
+    return paste.defaultPrevented;
   }
 
   // A middle click on a thread in T3 Code's list opens it in its own editor tab, like a browser tab.
@@ -478,6 +555,7 @@
         state.compact = message.compactChat !== false;
         compactSidebar();
         state.openFilesInEditor = message.openFilesInEditor !== false;
+        state.sendEditorContext = message.sendEditorContext !== false;
         break;
       case "theme":
         if (message.theme !== state.theme) {
@@ -499,6 +577,9 @@
         if (editor) editor.focus();
         break;
       }
+      case "ideContext":
+        if (pendingSend && pendingSend.id === message.requestId) finishSend(message.context);
+        break;
       case "palette":
         applyPalette(message.enabled ? message.vars : null);
         break;

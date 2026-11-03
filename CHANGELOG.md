@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2
+
+- The chat sees the editor. Each message you send carries a chip with the file in focus, the cursor or selected lines, what is on screen, the other open files and the Problems the editor shows (errors first, with their source and code). Ask "what error is the editor showing?" and the agent knows. It is read when you press Enter, so it is never stale, and attached again in a thread only after it changes. An open `@` or `/` menu still takes Enter. `threadside.sendEditorContext` turns it off.
+
 ## 0.3.1
 
 - Thread search (⇧⌘H) groups threads the way T3 Code does: Pinned, Active, Snoozed and Settled, each with a count. Settled threads carry a check icon and say "Settled".

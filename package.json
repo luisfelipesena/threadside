@@ -2,7 +2,7 @@
   "name": "threadside",
   "displayName": "Threadside: T3 Code chat for Cursor and VS Code",
   "description": "Your own T3 Code server's chat beside your code: every thread, provider, worktree and device from T3 Code, with file links that open in the editor, selection and file chips, review in the diff view and Cursor-style shortcuts.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "luisfelipesena",
   "preview": true,
   "license": "MIT",
@@ -488,6 +488,11 @@
             "ctrl+`": "workbench.action.terminal.toggleTerminal"
           },
           "markdownDescription": "While the chat has focus, these shortcuts run editor commands instead of going to T3 Code. Keys are written like `mod+shift+p` (`mod` is ⌘ on macOS and Ctrl elsewhere; on macOS `ctrl` is the Control key). Every other shortcut goes to T3 Code (⌘K palette, ⌘B sidebar, ⌘F find, model and host pickers…). Remove an entry to give that key back to T3 Code."
+        },
+        "threadside.sendEditorContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Attach the editor's state to the message you send: the file in focus, the cursor or selection, the open files and the Problems the editor shows. Sent as a chip in the message, and again in a thread only after it changes."
         },
         "threadside.compactChat": {
           "type": "boolean",

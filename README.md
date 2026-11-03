@@ -17,6 +17,7 @@ The chat is T3 Code's own web app, served by your server, so every provider, acc
 - **Answers that read like Cursor's.** Markdown, tables, Mermaid diagrams, syntax-highlighted code with copy buttons, HTML visual replies and MCP apps, rendered by T3 Code.
 - **File links that open in the editor.** Clicking `src/app.ts:42` in an answer opens that file at that line in your code column, in the thread's own worktree when it has one. A bare or partial path (`observability.py:10`) is found in the worktree, the open workspace or the project; when several files match you pick one. Alt-click keeps T3 Code's preview.
 - **Code into the chat.** <kbd>⌘L</kbd> adds the selected lines as an `app.ts:10-24` chip, or the whole file when nothing is selected. **Add to T3 Chat** in the Explorer (several files at once) and on editor tabs does the same, so does dragging files onto the chat with <kbd>Shift</kbd> held, and T3 Code's own `@` finds any file.
+- **The chat sees your editor.** A message you send carries a `Cursor editor (logger.py:158, 9 errors)` chip: the file in focus, the cursor or selected lines, the other open files and the Problems the editor shows. Ask "what is this error?" without copying anything. It is read when you press Enter and attached again in a thread only after it changes; `threadside.sendEditorContext` turns it off.
 - **Native review.** **Review Thread Changes** opens the thread's uncommitted work, or its whole branch, in the editor's multi-file diff.
 - **Side chats, forks, worktrees, devices, previews** and everything else in T3 Code work as they do in the app. `/btw` (or **T3: Side Chat**) opens a side chat with **Bring back**; **Fork from this response** branches a thread.
 - **Remote-SSH aware.** In a remote window Threadside runs on the remote machine, finds the T3 Code server there and reaches it through the editor's own tunnel.
@@ -83,6 +84,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.serverUrl` | empty | A server to use instead of the one on this machine. |
 | `threadside.chatLocation` | `side` | Dock the chat in a side bar (the Secondary Side Bar on first run), or open it as an editor tab beside the code or in the active group. |
 | `threadside.threadScope` | `workspace` | Thread search lists this window's projects first, or every project equally. |
+| `threadside.sendEditorContext` | `true` | Send the focused file, cursor or selection, open files and Problems with a message, as a chip. |
 | `threadside.compactChat` | `true` | Start the narrow chat with T3 Code's thread sidebar closed. |
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
 | `threadside.matchEditorColors` | `true` | Use the editor's colors and fonts in the chat. |

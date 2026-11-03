@@ -150,6 +150,7 @@ export class ChatPanel {
       compactChat: vscode.workspace.getConfiguration("threadside").get("compactChat", true),
       openFilesInEditor: vscode.workspace.getConfiguration("threadside").get("openFileLinksInEditor", true),
       matchEditorColors: vscode.workspace.getConfiguration("threadside").get("matchEditorColors", true),
+      sendEditorContext: vscode.workspace.getConfiguration("threadside").get("sendEditorContext", true),
     });
   }
 

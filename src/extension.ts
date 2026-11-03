@@ -8,6 +8,7 @@ import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
 import { log, redact } from "./log";
 import { isInside, mentionFor } from "./native/fileLinks";
+import { type EditorSnapshot, ideContext, type Problem } from "./native/ideContext";
 import { resolveFileLink } from "./native/resolveFile";
 import { reviewChanges } from "./native/review";
 import { lockChatGroup } from "./native/chatDock";
@@ -320,9 +321,59 @@ class Controller implements vscode.Disposable {
           void this.openThread(message.threadId, true);
         }
         break;
+      case "ideContextRequest": {
+        const snapshot = config().get("sendEditorContext", true) ? this.editorSnapshot() : undefined;
+        const environmentId = this.environment.descriptor?.environmentId;
+        panel.post({ type: "ideContext", requestId: message.requestId, context: snapshot && environmentId ? { ...ideContext(snapshot), environmentId } : null });
+        break;
+      }
       default:
         break;
     }
+  }
+
+  /** The editor the user was last in (the chat itself has focus while they type to it). */
+  private editorSnapshot(): EditorSnapshot | undefined {
+    const editor = vscode.window.activeTextEditor ?? this.lastTextEditor;
+    const document = editor?.document;
+    if (!editor || !document || document.isClosed || !isDiskFile(document.uri)) return undefined;
+    const problemsOf = (uri: vscode.Uri): Problem[] =>
+      vscode.languages
+        .getDiagnostics(uri)
+        .filter((diagnostic) => diagnostic.severity <= vscode.DiagnosticSeverity.Warning)
+        .map((diagnostic) => ({
+          severity: diagnostic.severity === vscode.DiagnosticSeverity.Error ? "error" : "warning",
+          line: diagnostic.range.start.line + 1,
+          column: diagnostic.range.start.character + 1,
+          message: diagnostic.message,
+          source: diagnostic.source,
+          code: typeof diagnostic.code === "object" ? String(diagnostic.code.value) : diagnostic.code === undefined ? undefined : String(diagnostic.code),
+        }));
+    const open = new Map<string, vscode.Uri>();
+    for (const tab of vscode.window.tabGroups.all.flatMap((group) => group.tabs)) {
+      if (tab.input instanceof vscode.TabInputText && isDiskFile(tab.input.uri)) open.set(tab.input.uri.fsPath, tab.input.uri);
+    }
+    const selection = editor.selection;
+    const position = (at: vscode.Position) => ({ line: at.line + 1, column: at.character + 1 });
+    const visible = editor.visibleRanges;
+    return {
+      ide: vscode.env.appName,
+      file: document.uri.fsPath,
+      language: document.languageId,
+      cursor: position(selection.active),
+      selection: selection.isEmpty ? undefined : { start: position(selection.start), end: position(selection.end) },
+      visible: visible.length ? { start: visible[0]!.start.line + 1, end: visible[visible.length - 1]!.end.line + 1 } : undefined,
+      dirty: document.isDirty,
+      openFiles: [...open.keys()],
+      problems: problemsOf(document.uri),
+      otherProblems: [...open]
+        .filter(([file]) => file !== document.uri.fsPath)
+        .map(([file, uri]) => {
+          const problems = problemsOf(uri);
+          const errors = problems.filter((problem) => problem.severity === "error").length;
+          return { file, errors, warnings: problems.length - errors };
+        }),
+    };
   }
 
   private async openFile(panel: ChatPanel, href: string, beside: boolean): Promise<void> {
@@ -835,6 +886,10 @@ class Controller implements vscode.Disposable {
 
 function isChatTab(tab: vscode.Tab): boolean {
   return tab.input instanceof vscode.TabInputWebview && tab.input.viewType.endsWith(VIEW_TYPE);
+}
+
+function isDiskFile(uri: vscode.Uri): boolean {
+  return uri.scheme === "file" || uri.scheme === "vscode-remote";
 }
 
 function config(): vscode.WorkspaceConfiguration {
