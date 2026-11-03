@@ -372,7 +372,9 @@ ${
     // From the extension: the webview shell posts with this page's own origin, which no other frame
     // (the chat or anything inside it) can claim.
     if (event.origin !== window.origin || data.source !== "threadside-host") return;
-    if (data.type === "focusComposer" || data.type === "insert" || data.type === "mentions") frame.focus();
+    // These hand the keyboard to T3 Code: a picker a shortcut opens takes its own keys (⌘1-⌘9, arrows,
+    // Enter) only while focus is inside its frame; otherwise the editor gets them.
+    if (["focusComposer", "insert", "mentions", "shortcut"].includes(data.type)) frame.focus();
     if (data.type === "config") matchColors = data.matchEditorColors !== false;
     frame.contentWindow.postMessage(data, origin);
     // The webview updates its --vscode-* variables after a theme change; read them next frame.
