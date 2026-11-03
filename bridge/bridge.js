@@ -92,7 +92,7 @@
         this.onclose = null;
         this.id = ++notificationSeq;
         notifications.set(this.id, this);
-        post({ type: "notification", id: this.id, title: this.title, body: this.body, tag: this.tag });
+        post({ type: "notification", id: this.id, title: this.title, body: this.body, tag: this.tag, scopeKeys: projectScopeKeys() });
       }
       close() {
         if (!notifications.delete(this.id)) return;
@@ -111,8 +111,20 @@
     if (typeof notification.onclick === "function") notification.onclick(event);
   }
 
+  // The projects T3 Code's thread list is filtered to (empty: every project). Notifications follow it,
+  // so a window filtered to one project only hears about that project.
+  function projectScopeKeys() {
+    try {
+      const ui = JSON.parse(localStorage.getItem("t3code:ui-state:v1") || "{}");
+      if (Array.isArray(ui.sidebarProjectScopeKeys)) return ui.sidebarProjectScopeKeys.filter((key) => typeof key === "string");
+      return typeof ui.sidebarProjectScopeKey === "string" ? [ui.sidebarProjectScopeKey] : [];
+    } catch {
+      return [];
+    }
+  }
+
   // T3 Code's own notification choice (Settings → Thread notifications), so the extension's
-  // notifications stay quiet while T3 Code's are on.
+  // notifications stay quiet while T3 Code's are on, and the list filter they follow.
   let reportedMode;
   function reportNotificationMode() {
     let mode = "off";
@@ -121,9 +133,11 @@
     } catch {
       // unreadable settings: T3 Code's default
     }
-    if (mode === reportedMode) return;
-    reportedMode = mode;
-    post({ type: "notificationMode", mode });
+    const scopeKeys = projectScopeKeys();
+    const report = JSON.stringify([mode, scopeKeys]);
+    if (report === reportedMode) return;
+    reportedMode = report;
+    post({ type: "notificationMode", mode, scopeKeys });
   }
   setInterval(reportNotificationMode, 3000);
 
@@ -299,6 +313,46 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       post({ type: "shortcut", chord: key });
+    },
+    true,
+  );
+
+  // ⌘+ / ⌘= and ⌘- zoom the chat, ⌘0 resets it, like T3 Code's desktop app and a browser. The editor's
+  // own zoom never sees keys typed in this frame. T3 Code sizes its interface in rem, so the root font
+  // size scales text, spacing and icons together without changing the page's height. Kept per chat.
+  const ZOOM_STEPS = [0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+  let zoom = 1;
+  try {
+    const saved = Number(localStorage.getItem("threadside:zoom"));
+    if (ZOOM_STEPS.includes(saved)) zoom = saved;
+  } catch {
+    // storage unavailable: default size
+  }
+  applyZoom();
+  function applyZoom() {
+    if (zoom === 1) document.documentElement.style.removeProperty("font-size");
+    else document.documentElement.style.setProperty("font-size", 16 * zoom + "px");
+    try {
+      localStorage.setItem("threadside:zoom", String(zoom));
+    } catch {
+      // storage unavailable: the zoom lasts for this page only
+    }
+  }
+  window.addEventListener(
+    "keydown",
+    (event) => {
+      if (!event.isTrusted || !(isMac ? event.metaKey : event.ctrlKey) || event.altKey) return;
+      const index = ZOOM_STEPS.indexOf(zoom);
+      let next;
+      if (event.code === "Equal" || event.key === "+" || event.key === "=") next = ZOOM_STEPS[Math.min(index + 1, ZOOM_STEPS.length - 1)];
+      else if (event.code === "Minus" || event.key === "-") next = ZOOM_STEPS[Math.max(index - 1, 0)];
+      else if ((event.code === "Digit0" || event.key === "0") && !event.shiftKey) next = 1;
+      else return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (next === zoom) return;
+      zoom = next;
+      applyZoom();
     },
     true,
   );
@@ -672,24 +726,40 @@
   // Answers a picker that a shortcut opened (such as chat.new's project list) by choosing the row
   // titled `text`. The palette clears its query as it mounts, so it types only once the rows are
   // there, and it picks only an exact title: with no exact match the palette stays open for the user
-  // rather than starting the thread in the wrong project.
-  function pickInPalette(text, attempt) {
-    attempt = attempt || 0;
-    const input = document.activeElement;
-    if (!(input instanceof HTMLInputElement) || !document.querySelector('[data-slot="command-item"]')) {
-      if (attempt < 60) setTimeout(() => pickInPalette(text, attempt + 1), 50);
-      return;
-    }
-    if (input.value !== text) {
-      input.focus();
-      input.select();
-      document.execCommand("insertText", false, text);
-    }
-    const row = [...document.querySelectorAll('[data-slot="command-item"]')].find(
-      (item) => item.querySelector(".truncate")?.textContent.trim() === text,
-    );
-    if (row) row.click();
-    else if (attempt < 60) setTimeout(() => pickInPalette(text, attempt + 1), 50);
+  // rather than starting the thread in the wrong project. The row is chosen the way a person would,
+  // with Enter on the highlighted row, and the bridge lets go as soon as the user clicks or types.
+  function pickInPalette(text) {
+    let userActed = false;
+    const yieldToUser = (event) => {
+      if (event.isTrusted) userActed = true;
+    };
+    window.addEventListener("pointerdown", yieldToUser, true);
+    window.addEventListener("keydown", yieldToUser, true);
+    const finish = () => {
+      window.removeEventListener("pointerdown", yieldToUser, true);
+      window.removeEventListener("keydown", yieldToUser, true);
+    };
+    const titleOf = (item) => ((item.querySelector(".truncate") || item).textContent || "").trim();
+    let attempt = 0;
+    (function step() {
+      if (userActed || attempt++ > 60) return finish();
+      const input = document.activeElement;
+      const rows = [...document.querySelectorAll('[data-slot="command-item"]')];
+      if (!(input instanceof HTMLInputElement) || !rows.length) return void setTimeout(step, 50);
+      if (input.value !== text) {
+        input.select();
+        document.execCommand("insertText", false, text);
+        return void setTimeout(step, 50);
+      }
+      const row = rows.find((item) => titleOf(item) === text);
+      if (!row) return void setTimeout(step, 50);
+      finish();
+      if (row.hasAttribute("data-highlighted")) {
+        input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", code: "Enter", bubbles: true, cancelable: true }));
+      } else {
+        row.click();
+      }
+    })();
   }
 
   // Beside the code the column is narrow: start with T3 Code's own thread sidebar closed so the

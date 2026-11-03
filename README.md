@@ -56,6 +56,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 | <kbd>⌘N</kbd> in the chat, <kbd>⌘'</kbd> anywhere | New thread in the repository you are in |
 | <kbd>⇧⌘H</kbd> | Search threads, grouped as Pinned, Active, Snoozed and Settled. <kbd>↵</kbd> opens a thread in the chat, <kbd>⌘T</kbd> opens it in a new tab, and each row has **Settle** and **Open in New Tab** buttons |
 | <kbd>⌥⌘E</kbd> | Chat full width: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab |
+| <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | In the chat: zoom in, zoom out, reset (kept per chat) |
 | <kbd>⌥⌘R</kbd> | Review the thread's changes |
 
 Without the takeover the same commands are on <kbd>⌃⌘L</kbd> (chat), <kbd>⌃⌘H</kbd> (search), <kbd>⌃⌘N</kbd> (new thread), <kbd>⌃⌘E</kbd> and <kbd>⌃⌘R</kbd>, and every command is in the Command Palette under **T3:**.
@@ -92,7 +93,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
 | `threadside.matchEditorColors` | `true` | Use the editor's colors and fonts in the chat. |
 | `threadside.openFileLinksInEditor` | `true` | Open file links in the editor (Alt-click for T3 Code's preview). |
-| `threadside.notifications` | `attention` | Notify when a thread waits for you, fails or hits a usage limit. Quiet while T3 Code's own Thread notifications are on; those show as editor notifications whose **Open thread** opens the thread in the chat. |
+| `threadside.notifications` | `attention` | Notify when a thread waits for you, fails or hits a usage limit. Quiet while T3 Code's own Thread notifications are on; those show as editor notifications whose **Open thread** opens the thread in the chat. Both follow the project filter of the window's thread list. |
 
 ## Good to know
 

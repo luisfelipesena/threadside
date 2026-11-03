@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15
+
+- Notifications follow the project filter of T3 Code's thread list in each window. A window filtered to its own project (the default) only notifies about that project; pick several projects or All projects in the list and it notifies about those. This applies to T3 Code's Thread notifications and to Threadside's own. The log notes each T3 Code notification and whether it was shown.
+- ⌘+ (or ⌘=) and ⌘- zoom the chat in and out, and ⌘0 resets it, like T3 Code's desktop app. The zoom scales text, spacing and icons together and is kept per chat.
+- A new thread started from the editor picks its project in T3 Code's project list with Enter on the highlighted row, the way a person does, and lets go of the list as soon as you click or type in it.
+
 ## 0.3.14
 
 - T3 Code's Thread notifications turn on in chats that already ran 0.3.13. T3 Code saves its default "off" along with its other settings, and in the editor that "off" was never a choice (the permission could not be granted before 0.3.13), so each chat turns notifications on once more. A choice made in Settings afterwards stays.

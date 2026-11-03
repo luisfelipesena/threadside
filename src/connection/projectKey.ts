@@ -15,3 +15,17 @@ export function sidebarProjectKey(project: KeyedProject, environmentId: string):
   if (/^[A-Za-z]:[\\/]|^\\\\/.test(root)) root = root.replaceAll("/", "\\").toLowerCase();
   return `${environmentId}:${root}`;
 }
+
+/**
+ * The tag T3 Code gives a thread's notification (`BT` upstream): a 64-bit FNV-1a hash of
+ * `environmentId:threadId` over UTF-16 code units, as 16 hex digits.
+ */
+export function notificationTag(environmentId: string, threadId: string): string {
+  const text = `${environmentId}:${threadId}`;
+  let hash = 14695981039346656037n;
+  for (let index = 0; index < text.length; index++) {
+    hash ^= BigInt(text.charCodeAt(index));
+    hash = (hash * 1099511628211n) & 18446744073709551615n;
+  }
+  return hash.toString(16).padStart(16, "0");
+}

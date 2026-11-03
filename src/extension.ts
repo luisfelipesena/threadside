@@ -3,7 +3,7 @@ import { basename, join, relative as relativePath } from "node:path";
 import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
-import { sidebarProjectKey } from "./connection/projectKey";
+import { notificationTag, sidebarProjectKey } from "./connection/projectKey";
 import { isRunning, isSettled, limitResetAt, type ProjectShell, type ThreadShell } from "./connection/shell";
 import { canSelfUpdate, newerRelease, ReleaseFeed } from "./connection/updates";
 import { t3Shortcut } from "./connection/t3Keys";
@@ -52,6 +52,8 @@ class Controller implements vscode.Disposable {
   private lastTextEditor: vscode.TextEditor | undefined = vscode.window.activeTextEditor;
   /** T3 Code's own "Thread notifications" choice, reported by the chat; while it notifies, Threadside does not. */
   private t3NotificationMode: string | undefined;
+  /** The projects T3 Code's thread list is filtered to in this window's chat; empty means every project. */
+  private t3ScopeKeys: string[] | undefined;
   /** When each T3 Code notification was last shown, so every open chat reporting the same one shows it once. */
   private readonly shownNotifications = new Map<string, number>();
   /** Set once the user hides the docked chat, so the startup guard leaves it hidden. */
@@ -386,6 +388,7 @@ class Controller implements vscode.Disposable {
         break;
       case "notificationMode":
         if (typeof message.mode === "string") this.t3NotificationMode = message.mode;
+        this.t3ScopeKeys = scopeKeysOf(message.scopeKeys);
         break;
       case "notification":
         this.showT3Notification(panel, message);
@@ -1098,6 +1101,13 @@ class Controller implements vscode.Disposable {
     const title = typeof message.title === "string" ? message.title : "";
     const body = typeof message.body === "string" ? message.body : "";
     if (id === undefined || !title) return;
+    // Like the thread list beside it, a window notifies about the projects its list is filtered to.
+    const thread = this.threadForTag(typeof message.tag === "string" ? message.tag : "");
+    if (thread && !this.inT3Scope(thread, scopeKeysOf(message.scopeKeys))) {
+      log().info(`T3 notification "${title}" for a thread outside this window's thread-list filter; not shown.`);
+      return;
+    }
+    log().info(`T3 notification "${title}"${thread ? "" : " (thread not in the list)"}; shown.`);
     const key = `${String(message.tag ?? "")}|${title}|${body}`;
     const now = Date.now();
     for (const [shown, at] of this.shownNotifications) if (now - at > 10_000) this.shownNotifications.delete(shown);
@@ -1108,6 +1118,22 @@ class Controller implements vscode.Disposable {
       panel.reveal(false);
       panel.post({ type: "notificationClick", id });
     });
+  }
+
+  /** The thread a T3 Code notification is about, from its tag. */
+  private threadForTag(tag: string): ThreadShell | undefined {
+    const environmentId = this.environment.descriptor?.environmentId;
+    if (!environmentId || !tag) return undefined;
+    for (const thread of this.environment.shell.threads.values()) if (notificationTag(environmentId, thread.id) === tag) return thread;
+    return undefined;
+  }
+
+  /** Whether a thread's project is in T3 Code's thread-list filter (no filter means every project). */
+  private inT3Scope(thread: ThreadShell, scopeKeys: string[] | undefined): boolean {
+    const environmentId = this.environment.descriptor?.environmentId;
+    const project = this.environment.shell.projects.get(thread.projectId);
+    if (!scopeKeys?.length || !environmentId || !project) return true;
+    return scopeKeys.includes(sidebarProjectKey(project, environmentId));
   }
 
   private notify(ids: ReadonlySet<string>): void {
@@ -1129,7 +1155,8 @@ class Controller implements vscode.Disposable {
         continue;
       }
       this.lastSeen.set(id, thread);
-      if (mode === "off" || t3Notifies || !before || (scope && !scope.has(thread.projectId))) continue;
+      const outOfScope = this.t3ScopeKeys ? !this.inT3Scope(thread, this.t3ScopeKeys) : scope !== undefined && !scope.has(thread.projectId);
+      if (mode === "off" || t3Notifies || !before || outOfScope) continue;
       const visible = [...this.panels].some((panel) => panel.threadId === id && panel.visible && vscode.window.state.focused);
       if (visible) continue;
       let message: string | undefined;
@@ -1179,6 +1206,11 @@ function repositoryFolder(): string | undefined {
 async function hidden(chat: ChatPanel): Promise<boolean> {
   for (let attempt = 0; attempt < 40 && chat.visible; attempt++) await new Promise((resolve) => setTimeout(resolve, 25));
   return !chat.visible;
+}
+
+/** T3 Code's thread-list filter as the chat reports it: a list of project keys, empty for every project. */
+function scopeKeysOf(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : undefined;
 }
 
 function isChatTab(tab: vscode.Tab): boolean {
