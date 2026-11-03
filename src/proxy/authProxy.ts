@@ -1,10 +1,11 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createWriteStream, readFileSync } from "node:fs";
 import * as http from "node:http";
 import * as https from "node:https";
 import type { AddressInfo, Socket } from "node:net";
 import type { ConnectionTarget } from "../connection/environment";
 import { log, redact } from "../log";
+import { canConvert, converted, needsConversion, serveFile } from "./media";
 import { BRIDGE_PATH, injectBridge, upstreamUrl } from "./upstream";
 
 const KEY_PARAM = "threadside_key";
@@ -167,7 +168,23 @@ export class AuthProxy {
         });
         return;
       }
-      res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
+      const status = upstreamRes.statusCode ?? 502;
+      if ((status === 200 || status === 206) && needsConversion(type) && canConvert()) {
+        upstreamRes.destroy();
+        // T3 Code signs asset links with an expiry, so a validator names the file better than its URL.
+        const size = String(upstreamRes.headers["content-range"] ?? upstreamRes.headers["content-length"] ?? "").replace(/^.*\//, "");
+        const validator = upstreamRes.headers.etag ?? upstreamRes.headers["last-modified"];
+        const audio = type.toLowerCase().startsWith("audio/");
+        converted(validator ? `${validator}|${size}` : `${upstream.pathname}${upstream.search}`, audio, (file) => download(upstream, headers, file))
+          .then((file) => serveFile(req, res, file, audio ? "audio/mp4" : "video/mp4"))
+          .catch((error: Error) => {
+            log().warn(`Could not convert media for the editor: ${redact(error.message)}`);
+            if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+            res.end("Threadside could not convert this media.");
+          });
+        return;
+      }
+      res.writeHead(status, responseHeaders);
       upstreamRes.pipe(res);
     });
     proxied.on("error", (error) => {
@@ -229,6 +246,29 @@ export class AuthProxy {
     headers.authorization = `Bearer ${await target.bearer()}`;
     return headers;
   }
+}
+
+/** Downloads the whole original (no range) to a file, for conversion. */
+function download(upstream: URL, headers: http.OutgoingHttpHeaders, file: string): Promise<void> {
+  const whole = { ...headers, "accept-encoding": "identity" };
+  delete whole.range;
+  delete whole["if-range"];
+  const client = upstream.protocol === "https:" ? https : http;
+  return new Promise((resolve, reject) => {
+    const request = client.request(upstream, { method: "GET", headers: whole }, (response) => {
+      if (response.statusCode !== 200) {
+        response.resume();
+        return reject(new Error(`T3 Code answered ${response.statusCode}`));
+      }
+      const out = createWriteStream(file);
+      response.pipe(out);
+      out.on("finish", () => resolve());
+      out.on("error", reject);
+      response.on("error", reject);
+    });
+    request.on("error", reject);
+    request.end();
+  });
 }
 
 function deny(res: http.ServerResponse): void {

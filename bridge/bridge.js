@@ -505,7 +505,15 @@
     if (reportedErrors++ >= 20) return;
     post({ type: "clientError", message: String(message || "Unknown error").slice(0, 500), detail: String(detail || "").slice(0, 1500), path: location.pathname });
   }
-  window.addEventListener("error", (event) => reportError(event.message, event.error && event.error.stack));
+  window.addEventListener("error", (event) => {
+    const media = event.target;
+    if (media instanceof HTMLMediaElement) {
+      const error = media.error;
+      reportError("Media failed to play", (error ? error.code + " " + error.message : "no MediaError") + " " + (media.currentSrc || media.src).split("?")[0]);
+      return;
+    }
+    reportError(event.message, event.error && event.error.stack);
+  }, true);
   window.addEventListener("unhandledrejection", (event) => {
     const reason = event.reason;
     reportError(reason && reason.message ? reason.message : reason, reason && reason.stack);
