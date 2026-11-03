@@ -40,6 +40,22 @@
     }
   }
 
+  // A narrow docked list has no room for T3 Code's Working section, so it starts off. Each chat origin
+  // keeps its own settings; this runs once per origin, so turning it on in Settings stays.
+  foldWorkingSectionOnce();
+  function foldWorkingSectionOnce() {
+    try {
+      if (localStorage.getItem("threadside:workingSectionDefault")) return;
+      const raw = localStorage.getItem("t3code:client-settings:v1");
+      const settings = raw ? JSON.parse(raw) : {};
+      settings.sidebarWorkingShelfEnabled = false;
+      localStorage.setItem("t3code:client-settings:v1", JSON.stringify(settings));
+      localStorage.setItem("threadside:workingSectionDefault", "1");
+    } catch {
+      // storage unavailable: T3 Code's default applies
+    }
+  }
+
   function readCookie(name) {
     const match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
     return match ? decodeURIComponent(match[1]) : undefined;
