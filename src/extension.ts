@@ -620,6 +620,7 @@ class Controller implements vscode.Disposable {
    */
   private async toggleChat(): Promise<void> {
     const side = this.sideView;
+    log().info(`Toggle chat: docked chat ${side ? (side.active ? "has focus" : side.visible ? "visible" : "hidden") : "not created"}.`);
     if (side?.active || (sideLocation() === "side" && !this.activePanel?.panel?.active)) {
       if (side?.active) return this.hideSideView();
       const chat = await this.openChat();
@@ -660,8 +661,10 @@ class Controller implements vscode.Disposable {
       await vscode.commands.executeCommand(closer);
       if (side && (await hidden(side))) {
         if (closer !== learned) await this.context.globalState.update(CLOSER_KEY, closer);
+        log().info(`Hid the chat with ${closer}.`);
         break;
       }
+      log().info(`${closer} did not hide the chat.`);
       // A toggle that did not hide the chat opened that bar instead: close it again.
       if (closer === "workbench.action.toggleAuxiliaryBar") await vscode.commands.executeCommand(closer);
     }
@@ -1134,9 +1137,12 @@ function repositoryFolder(): string | undefined {
     .find((folder) => existsSync(join(folder, ".git", "HEAD")));
 }
 
-/** Waits briefly for the docked chat to report it is hidden. */
+/**
+ * Waits for the docked chat to report it is hidden. In a Remote-SSH window the report crosses the
+ * connection, so a closer that worked can take several hundred milliseconds to show it.
+ */
 async function hidden(chat: ChatPanel): Promise<boolean> {
-  for (let attempt = 0; attempt < 6 && chat.visible; attempt++) await new Promise((resolve) => setTimeout(resolve, 25));
+  for (let attempt = 0; attempt < 40 && chat.visible; attempt++) await new Promise((resolve) => setTimeout(resolve, 25));
   return !chat.visible;
 }
 

@@ -467,8 +467,40 @@
   }
 
   // File chips go through the composer's own drop handler, the path T3 Code's file tree uses.
+  // The paths (with line ranges) already in the composer, read from its ProseMirror document, else
+  // from the chips it renders.
+  function mentionedPaths(editor) {
+    const paths = new Set();
+    const doc = editor.pmViewDesc && editor.pmViewDesc.node;
+    if (doc && typeof doc.descendants === "function") {
+      doc.descendants((node) => {
+        if (node.type && node.type.name === "composer-mention" && node.attrs && node.attrs.path) paths.add(node.attrs.path);
+      });
+    }
+    editor.querySelectorAll("[data-composer-mention][path]").forEach((chip) => paths.add(chip.getAttribute("path")));
+    return paths;
+  }
+
+  // `[label](destination)` → the path the composer stores for it.
+  function mentionPath(mention) {
+    const match = /\]\(([^)]*)\)$/.exec(mention);
+    if (!match) return mention;
+    try {
+      return decodeURIComponent(match[1]);
+    } catch {
+      return match[1];
+    }
+  }
+
   function insertMentions(mentions) {
     whenComposer((editor) => {
+      // ⌘L on the same file or lines again focuses the composer instead of adding a second chip.
+      const present = mentionedPaths(editor);
+      mentions = mentions.filter((mention) => !present.has(mentionPath(mention)));
+      if (!mentions.length) {
+        editor.focus();
+        return;
+      }
       const transfer = new DataTransfer();
       transfer.setData("application/x-t3code-composer-mention", mentions.join(" "));
       // Only `drop`: a synthetic dragenter would reach the window and leave T3 Code's file-drop overlay up.

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.11
+
+- ⌘L adds the file (or the selected lines) only when the composer does not already hold it; pressing it again just focuses the composer.
+- ⌘I hides the docked chat in a Remote-SSH window again: the editor reports the view hidden across the connection, which can take longer than the 150 ms Threadside waited, so it took the hide for a miss and showed the bar again. It now waits up to a second, and the log names the command that hid the chat.
+
 ## 0.3.10
 
 - The chat comes back on startup when Cursor switches the Secondary Side Bar to its own agent a few seconds after a window opens. Cursor still reports the chat's view as visible behind its agent, so the chat's tab is brought forward at fixed points of startup, with the focus returned to the code; a chat you hide stays hidden.
