@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.9
+
+- In the chat, Ctrl+Tab and Ctrl+Shift+Tab move to the next and previous thread, like T3 Code's own ⇧⌘] and ⇧⌘[ (and following any remapping of those in T3 Code's keybindings).
+
 ## 0.3.8
 
 - A new window with no folder keeps Cursor's start page: the chat no longer opens there on its own (Cursor restores it with the layout, so it is hidden once). Windows with a folder still open the chat on its thread or a draft in the window's project.
