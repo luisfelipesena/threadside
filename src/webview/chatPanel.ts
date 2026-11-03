@@ -109,7 +109,8 @@ export class ChatPanel {
     const nonce = randomBytes(16).toString("base64");
     const webview = this.surface.webview;
     if (!this.renderedFor) {
-      webview.html = hostHtml(undefined, "", nonce, webview.cspSource);
+      const connecting = this.host.environment.status.kind === "connecting" || this.host.environment.status.kind === "idle";
+      webview.html = hostHtml(undefined, "", nonce, webview.cspSource, connecting);
       return;
     }
     const origin = await this.host.proxyOrigin();
@@ -233,7 +234,7 @@ function extensionUri(): vscode.Uri {
  * the extension; messages from the extension go to the frame. A watchdog replaces a blank tab with a
  * clear error, a Reload button and the log.
  */
-function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, cspSource: string): string {
+function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, cspSource: string, connecting = false): string {
   const csp = [
     "default-src 'none'",
     ...(src ? [`frame-src ${frameOrigin}`] : []),
@@ -265,7 +266,9 @@ ${
   src
     ? `<iframe id="chat" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen; display-capture" allowfullscreen></iframe>
 <div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>`
-    : `<div id="offline" class="notice"><div>
+    : connecting
+      ? `<div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>`
+      : `<div id="offline" class="notice"><div>
   <p><strong>T3 Code is not connected</strong></p>
   <p class="muted">Use the T3 Code server on this machine, or pair with one on another.</p>
   <div class="actions"><button id="connect" class="primary">Connect…</button><button id="offline-log">Show Log</button></div>
@@ -283,8 +286,8 @@ ${
   const vscode = acquireVsCodeApi();
   const frame = document.getElementById("chat");
   if (!frame) {
-    document.getElementById("connect").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "connect" }));
-    document.getElementById("offline-log").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
+    document.getElementById("connect")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "connect" }));
+    document.getElementById("offline-log")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
     return;
   }
   const origin = ${JSON.stringify(frameOrigin)};

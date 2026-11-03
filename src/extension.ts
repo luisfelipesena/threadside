@@ -744,15 +744,20 @@ class Controller implements vscode.Disposable {
     if (chord) chat.post({ type: "shortcut", chord, pick });
   }
 
-  /** The T3 project for a new thread: the active file's, a workspace folder's, then the open thread's. */
+  /**
+   * The T3 project for a new thread: the one whose folder is this window's folder, then the active
+   * file's, then the project holding a workspace folder, then the open thread's. A window on a parent
+   * folder stays in its own project even while a file of a nested project is open.
+   */
   private workspaceProject() {
     const shell = this.environment.shell;
+    const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
     const file = (vscode.window.activeTextEditor ?? this.lastTextEditor)?.document.uri;
     const thread = this.activeThread();
-    // Like Cursor's new chat: the project you are coding in first, then the open thread's project.
     const candidates = [
+      ...folders.map((folder) => shell.projectAt(folder)),
       file?.scheme === "file" || file?.scheme === "vscode-remote" ? shell.projectForPath(file.fsPath) : undefined,
-      ...(vscode.workspace.workspaceFolders ?? []).map((folder) => shell.projectForPath(folder.uri.fsPath)),
+      ...folders.map((folder) => shell.projectForPath(folder)),
       thread ? shell.projects.get(thread.projectId) : undefined,
     ];
     return candidates.find((project) => project !== undefined);
@@ -806,14 +811,23 @@ class Controller implements vscode.Disposable {
     pick.placeholder = "Search threads by title, project or branch  ·  ↵ open  ·  ⌘T open in new tab";
     pick.matchOnDescription = true;
     pick.matchOnDetail = true;
+    // Matches keep the list's last-activity order instead of being ranked by how well the title matches.
+    // `sortByLabel` is typed only in a proposed API, but the editor honours it at runtime.
+    (pick as vscode.QuickPick<ThreadItem> & { sortByLabel: boolean }).sortByLabel = false;
+    let searching = false;
     const refresh = () => {
       const active = pick.activeItems[0]?.thread?.id;
-      pick.items = threadPickerItems([...shell.threads.values()], scope, (id) => shell.projects.get(id)?.title);
+      pick.items = threadPickerItems([...shell.threads.values()], scope, (id) => shell.projects.get(id)?.title, searching);
       const again = active && pick.items.find((item) => item.thread?.id === active);
       if (again) pick.activeItems = [again];
     };
     refresh();
     const subscription = shell.onDidChange(refresh);
+    pick.onDidChangeValue((value) => {
+      if (Boolean(value) === searching) return;
+      searching = Boolean(value);
+      refresh();
+    });
     pick.onDidTriggerItemButton(({ item, button }) => {
       const thread = item.thread;
       if (!thread) return;

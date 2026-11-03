@@ -48,7 +48,7 @@
   },
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished",
+    "*",
     "onUri",
     "onWebviewPanel:threadside.chat",
     "onView:threadside.chatView"
