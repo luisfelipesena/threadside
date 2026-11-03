@@ -1,9 +1,10 @@
-import { relative as relativePath } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, join, relative as relativePath } from "node:path";
 import * as vscode from "vscode";
 import { resolveT3Home } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
 import { sidebarProjectKey } from "./connection/projectKey";
-import { isRunning, isSettled, limitResetAt, type ThreadShell } from "./connection/shell";
+import { isRunning, isSettled, limitResetAt, type ProjectShell, type ThreadShell } from "./connection/shell";
 import { canSelfUpdate, newerRelease, ReleaseFeed } from "./connection/updates";
 import { t3Shortcut } from "./connection/t3Keys";
 import { restoreShortcuts, takeOverShortcuts } from "./keybindings/takeover";
@@ -21,6 +22,8 @@ import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, VIEW_TYPE
 
 const PORT_KEY = "threadside.proxyPort";
 const DOCKED_KEY = "threadside.dockedOnRight";
+/** The command that last hid the docked chat, which tells where the user keeps it. */
+const CLOSER_KEY = "threadside.dockCloser";
 
 export function activate(context: vscode.ExtensionContext): void {
   setExtensionUri(context.extensionUri);
@@ -151,6 +154,7 @@ class Controller implements vscode.Disposable {
   private async dockOnRightOnce(): Promise<void> {
     if (sideLocation() !== "side" || this.context.globalState.get(DOCKED_KEY)) return;
     await this.context.globalState.update(DOCKED_KEY, true);
+    await this.context.globalState.update(CLOSER_KEY, "workbench.action.toggleAuxiliaryBar");
     try {
       // For a view alone in its Side Bar container the destination picker lists "New Panel Entry",
       // then "New Secondary Side Bar Entry".
@@ -170,7 +174,7 @@ class Controller implements vscode.Disposable {
     const thread = saved && /^\/[^/]+\/[^/]+$/.test(saved) && !/^\/(draft|settings)\//.test(saved) ? saved : undefined;
     const chat = new ChatPanel(view, this.chatHost(), { path: thread ?? "/" });
     this.sideView = chat;
-    if (!thread) chat.onFirstReady = () => this.startDraft(chat);
+    chat.onFirstReady = () => void (thread ? this.keepThreadOrStartDraft(chat, thread) : this.startDraft(chat));
     chat.onDidDispose(() => {
       if (this.sideView === chat) this.sideView = undefined;
     });
@@ -269,7 +273,7 @@ class Controller implements vscode.Disposable {
     );
     const chat = this.adopt(new ChatPanel(panel, this.chatHost(), { path: options.path ?? "/" }));
     // A fresh chat with no thread starts a draft in the repository this window is coding in.
-    if (!options.path) chat.onFirstReady = () => this.startDraft(chat);
+    if (!options.path) chat.onFirstReady = () => void this.startDraft(chat);
     // Like Cursor's chat: a narrow column on the right that keeps file tabs out of it.
     if (beside && groupsBefore === 1 && vscode.window.tabGroups.all.length === 2) {
       await vscode.commands.executeCommand("vscode.setEditorLayout", { orientation: 0, groups: [{ size: 0.64 }, { size: 0.36 }] });
@@ -619,16 +623,23 @@ class Controller implements vscode.Disposable {
     chat.focusComposer();
   }
 
-  /** Hides the docked chat wherever it sits (Secondary Side Bar, Side Bar or panel) and returns to the code. */
+  /**
+   * Hides the docked chat wherever it sits (Side Bar, Secondary Side Bar or panel) and returns to the code.
+   * Cursor has no command that only closes the Secondary Side Bar, and toggling it while the chat lives
+   * elsewhere opens Cursor's own chat there, so the container that worked last time goes first.
+   */
   private async hideSideView(): Promise<void> {
     const side = this.sideView;
-    const closers = ["workbench.action.toggleAuxiliaryBar", "workbench.action.closeSidebar", "workbench.action.closePanel"];
-    for (const [index, closer] of closers.entries()) {
+    const learned = this.context.globalState.get<string>(CLOSER_KEY);
+    const closers = ["workbench.action.closeSidebar", "workbench.action.toggleAuxiliaryBar", "workbench.action.closePanel"];
+    for (const closer of learned && closers.includes(learned) ? [learned, ...closers.filter((other) => other !== learned)] : closers) {
       await vscode.commands.executeCommand(closer);
-      await new Promise((resolve) => setTimeout(resolve, 120));
-      if (!side?.visible) break;
-      // Toggling the Secondary Side Bar did not hide the chat, so it lives elsewhere: show the bar again.
-      if (index === 0) await vscode.commands.executeCommand(closer);
+      if (side && (await hidden(side))) {
+        if (closer !== learned) await this.context.globalState.update(CLOSER_KEY, closer);
+        break;
+      }
+      // A toggle that did not hide the chat opened that bar instead: close it again.
+      if (closer === "workbench.action.toggleAuxiliaryBar") await vscode.commands.executeCommand(closer);
     }
     await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
   }
@@ -645,7 +656,7 @@ class Controller implements vscode.Disposable {
    */
   private async newThread(): Promise<void> {
     const fromChat = this.activePanel?.active === true;
-    const target = fromChat ? undefined : this.workspaceProject();
+    const target = fromChat ? undefined : await this.ensureWorkspaceProject();
     const chat = await this.openChat();
     const currentId = chat.threadId ? this.environment.shell.threads.get(chat.threadId)?.projectId : undefined;
     const project = target ?? (currentId ? this.environment.shell.projects.get(currentId) : undefined) ?? this.workspaceProject();
@@ -723,19 +734,73 @@ class Controller implements vscode.Disposable {
   }
 
   /** Starts a draft in this window's project; a window with no T3 project keeps T3 Code's start page. */
-  private startDraft(chat: ChatPanel, waited = false): void {
-    const shell = this.environment.shell;
-    if (!shell.projects.size && !waited) {
-      // The chat can be ready before the first project list arrives.
-      const once = shell.onDidChange(() => {
-        once.dispose();
-        this.startDraft(chat, true);
-      });
-      this.disposables.push(once);
-      return;
-    }
-    const project = this.workspaceProject();
+  private async startDraft(chat: ChatPanel): Promise<void> {
+    await this.shellReady();
+    const project = await this.ensureWorkspaceProject();
     if (project) this.runT3Shortcut(chat, "chat.new", project.title);
+  }
+
+  /** A restored thread stays only while it belongs to this window's code; otherwise a draft starts there. */
+  private async keepThreadOrStartDraft(chat: ChatPanel, path: string): Promise<void> {
+    await this.shellReady();
+    const thread = this.environment.shell.threads.get(threadIdFromPath(path) ?? "");
+    const scope = this.scopeProjects();
+    const belongs = scope ? thread !== undefined && scope.has(thread.projectId) : thread !== undefined && !repositoryFolder();
+    if (!belongs && chat.path === path) await this.startDraft(chat);
+  }
+
+  /** Resolves once the first project and thread list has arrived (the chat can be ready before it). */
+  private async shellReady(): Promise<void> {
+    const shell = this.environment.shell;
+    if (shell.synchronized || shell.projects.size) return;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(done, 10_000);
+      const subscription = shell.onDidChange(() => shell.projects.size && done());
+      function done() {
+        clearTimeout(timer);
+        subscription.dispose();
+        resolve();
+      }
+    });
+  }
+
+  /**
+   * This window's T3 project. A repository folder T3 Code does not know yet becomes a project, as
+   * T3 Code's own "Add project" does, so the chat never starts in another repository.
+   */
+  private async ensureWorkspaceProject(): Promise<ProjectShell | undefined> {
+    const own = this.workspaceProject(false);
+    const folder = own ? undefined : repositoryFolder();
+    if (!folder || !config().get("createProjectForFolder", true) || this.environment.status.kind !== "connected") return own ?? this.workspaceProject();
+    const shell = this.environment.shell;
+    const created = new Promise<ProjectShell | undefined>((resolve) => {
+      const timer = setTimeout(() => done(undefined), 5_000);
+      const subscription = shell.onDidChange(() => {
+        const project = shell.projectAt(folder);
+        if (project) done(project);
+      });
+      function done(project: ProjectShell | undefined) {
+        clearTimeout(timer);
+        subscription.dispose();
+        resolve(project);
+      }
+    });
+    try {
+      // T3 Code creates projects through its own mutation, not the orchestration command stream.
+      await this.environment.call("projects.mutate", {
+        type: "project.create",
+        commandId: crypto.randomUUID(),
+        projectId: crypto.randomUUID(),
+        title: basename(folder),
+        workspaceRoot: folder,
+        createWorkspaceRootIfMissing: false,
+      });
+      log().info(`Added ${basename(folder)} to T3 Code as a project.`);
+    } catch (error) {
+      log().warn(`Could not add ${basename(folder)} to T3 Code: ${redact(error instanceof Error ? error.message : String(error))}`);
+      return this.workspaceProject();
+    }
+    return (await created) ?? this.workspaceProject();
   }
 
   /** Runs a T3 Code shortcut in the chat; `pick` answers the picker it opens, such as the project list. */
@@ -746,10 +811,10 @@ class Controller implements vscode.Disposable {
 
   /**
    * The T3 project for a new thread: the one whose folder is this window's folder, then the active
-   * file's, then the project holding a workspace folder, then the open thread's. A window on a parent
+   * file's, then the project holding a workspace folder, then (unless `orOpenThread` is false) the open thread's. A window on a parent
    * folder stays in its own project even while a file of a nested project is open.
    */
-  private workspaceProject() {
+  private workspaceProject(orOpenThread = true): ProjectShell | undefined {
     const shell = this.environment.shell;
     const folders = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
     const file = (vscode.window.activeTextEditor ?? this.lastTextEditor)?.document.uri;
@@ -758,7 +823,7 @@ class Controller implements vscode.Disposable {
       ...folders.map((folder) => shell.projectAt(folder)),
       file?.scheme === "file" || file?.scheme === "vscode-remote" ? shell.projectForPath(file.fsPath) : undefined,
       ...folders.map((folder) => shell.projectForPath(folder)),
-      thread ? shell.projects.get(thread.projectId) : undefined,
+      orOpenThread && thread ? shell.projects.get(thread.projectId) : undefined,
     ];
     return candidates.find((project) => project !== undefined);
   }
@@ -1020,6 +1085,23 @@ class Controller implements vscode.Disposable {
     for (const panel of this.panels) panel.panel?.dispose();
     for (const disposable of this.disposables) disposable.dispose();
   }
+}
+
+/**
+ * The window's first folder that is a repository's own root, on the machine running the workspace. A
+ * linked worktree (whose `.git` is a file) is left to the project of its repository.
+ */
+function repositoryFolder(): string | undefined {
+  return (vscode.workspace.workspaceFolders ?? [])
+    .filter((folder) => folder.uri.scheme === "file" || folder.uri.scheme === "vscode-remote")
+    .map((folder) => folder.uri.fsPath)
+    .find((folder) => existsSync(join(folder, ".git", "HEAD")));
+}
+
+/** Waits briefly for the docked chat to report it is hidden. */
+async function hidden(chat: ChatPanel): Promise<boolean> {
+  for (let attempt = 0; attempt < 6 && chat.visible; attempt++) await new Promise((resolve) => setTimeout(resolve, 25));
+  return !chat.visible;
 }
 
 function isChatTab(tab: vscode.Tab): boolean {

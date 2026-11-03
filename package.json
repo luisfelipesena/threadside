@@ -436,6 +436,11 @@
           "default": true,
           "description": "Show the chat when a window starts, in place of Cursor's own agent pane, which Cursor reopens on every start. The code keeps the focus."
         },
+        "threadside.createProjectForFolder": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the window's folder is a repository T3 Code does not know yet, add it as a T3 Code project so the chat starts there instead of in another project."
+        },
         "threadside.threadScope": {
           "type": "string",
           "enum": [

@@ -43,3 +43,9 @@ test("the UI platform comes from the keybindings path", () => {
   assert.equal(uiPlatformOf("/home/me/.config/Cursor/User/keybindings.json"), "other");
   assert.ok(renderBlock("other").includes('"ctrl+i"'));
 });
+
+test("unbinds Cursor's Open Chat before giving ⌘I to the chat", () => {
+  const rules = parse(`[${renderBlock("mac")}]`) as Array<{ key: string; command: string }>;
+  const onI = rules.filter((rule) => rule.key === "cmd+i").map((rule) => rule.command);
+  assert.deepEqual(onI, ["-composer.startComposerPrompt", "threadside.toggleChat"]);
+});

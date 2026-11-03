@@ -7,6 +7,8 @@ export const END = "// threadside:end";
  * matching rule wins, so no Cursor binding has to be removed: undoing the takeover is deleting the block.
  */
 export const TAKEOVER_RULES: Array<{ key: string; command: string; when?: string }> = [
+  // Cursor's own "Open Chat" sits on ⌘I at a high weight; unbinding it keeps ⌘I for T3 alone.
+  { key: "cmd+i", command: "-composer.startComposerPrompt" },
   { key: "cmd+i", command: "threadside.toggleChat" },
   { key: "cmd+l", command: "threadside.focusOrAddSelection" },
   { key: "shift+cmd+l", command: "threadside.addSelection", when: "editorTextFocus && editorHasSelection" },
