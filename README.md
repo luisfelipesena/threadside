@@ -54,7 +54,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 |---|---|
 | <kbd>⌘I</kbd> | Show or hide the chat: a hidden chat opens on the composer, a chat on screen hides (the conversation keeps running) |
 | <kbd>⌘L</kbd> | Add the selection, or the current file, to the chat |
-| <kbd>⌘N</kbd> in the chat, <kbd>⌘'</kbd> anywhere | New thread in the repository you are in |
+| <kbd>⌘'</kbd> anywhere | New thread in the repository you are in (<kbd>⌘N</kbd> in the chat is T3 Code's own: its project picker, with ⌘1-⌘9) |
 | <kbd>⇧⌘H</kbd> | Search threads, grouped as Pinned, Active, Snoozed and Settled. <kbd>↵</kbd> opens a thread in the chat, <kbd>⌘T</kbd> opens it in a new tab, and each row has **Settle** and **Open in New Tab** buttons |
 | <kbd>⌥⌘E</kbd> | Chat full width: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab |
 | <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | In the chat: zoom in, zoom out, reset (kept per chat) |
@@ -62,7 +62,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 
 Without the takeover the same commands are on <kbd>⌃⌘L</kbd> (chat), <kbd>⌃⌘H</kbd> (search), <kbd>⌃⌘N</kbd> (new thread), <kbd>⌃⌘E</kbd> and <kbd>⌃⌘R</kbd>, and every command is in the Command Palette under **T3:**.
 
-**Inside the chat** keys belong to T3 Code (<kbd>⌘K</kbd> palette, <kbd>⌘B</kbd> sidebar, <kbd>⌘F</kbd> find, model and host pickers…), except the ones in `threadside.chatShortcuts`, which run editor commands: <kbd>⌘I</kbd>, <kbd>⌘N</kbd>, <kbd>⇧⌘H</kbd>, <kbd>⌘L</kbd>, <kbd>⌘⇧P</kbd>, <kbd>⌘P</kbd>, <kbd>⌘E</kbd>, <kbd>⌘J</kbd>, <kbd>⌘R</kbd>, <kbd>⌃`</kbd> and the view shortcuts. Edit that setting to add or give back keys.
+**Inside the chat** keys belong to T3 Code (<kbd>⌘K</kbd> palette, <kbd>⌘B</kbd> sidebar, <kbd>⌘F</kbd> find, model and host pickers…), except the ones in `threadside.chatShortcuts`, which run editor commands: <kbd>⌘I</kbd>, <kbd>⇧⌘H</kbd>, <kbd>⌘L</kbd>, <kbd>⌘⇧P</kbd>, <kbd>⌘P</kbd>, <kbd>⌘E</kbd>, <kbd>⌘J</kbd>, <kbd>⌘R</kbd>, <kbd>⌃`</kbd> and the view shortcuts. Edit that setting to add or give back keys.
 
 ![Search threads](docs/images/search.png)
 
