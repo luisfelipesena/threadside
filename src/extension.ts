@@ -615,14 +615,16 @@ class Controller implements vscode.Disposable {
   }
 
   /**
-   * ⌘I: like Cursor's chat pane. Opens the chat focused on the composer; from the chat, hides it by
-   * maximizing the file group, so the conversation keeps running and comes back as it was.
+   * ⌘I: like Cursor's chat pane. A docked chat on screen hides; a hidden one opens focused on the
+   * composer. A chat tab hides by maximizing the file group, so the conversation keeps running and
+   * comes back as it was.
    */
   private async toggleChat(): Promise<void> {
     const side = this.sideView;
     log().info(`Toggle chat: docked chat ${side ? (side.active ? "has focus" : side.visible ? "visible" : "hidden") : "not created"}.`);
     if (side?.active || (sideLocation() === "side" && !this.activePanel?.panel?.active)) {
-      if (side?.active) return this.hideSideView();
+      // A toggle, like Cursor's own pane: a docked chat on screen hides, wherever the focus is.
+      if (side?.visible) return this.hideSideView();
       const chat = await this.openChat();
       chat.focusComposer();
       return;

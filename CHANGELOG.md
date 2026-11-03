@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.12
+
+- ⌘I is a toggle: a docked chat on screen hides wherever the focus is, and a hidden one opens on the composer. Before, ⌘I from the code focused a visible chat, and in VS Code the focus did not reach the chat, so the next ⌘I never hid it.
+
 ## 0.3.11
 
 - ⌘L adds the file (or the selected lines) only when the composer does not already hold it; pressing it again just focuses the composer.
