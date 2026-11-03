@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.20
+
+- Media converts only where the editor needs it. The chat reports whether the editor decodes AAC: Cursor does, so its videos play as T3 Code sends them, with no ffmpeg; VS Code does not, so its MP4 and M4A media are converted. MOV files (usually HEVC from an iPhone) are converted in both.
+- When media needs converting and the machine has no ffmpeg, the editor says so once, with the install command for that system (`brew install ffmpeg`, `winget install ffmpeg` or the distribution's package) and a button that copies it. ffmpeg is also found on Windows now.
+
 ## 0.3.19
 
 - ⌘N in the chat is T3 Code's own again: it opens the project picker with the cursor in its search, so typing filters the projects and ⌘1-⌘9 pick one, as in T3 Code's app. Threadside no longer takes ⌘N in the chat to start a thread in the current project; ⌘' and the New Thread button still do. Before, the picker that Threadside opened left the keyboard outside its search, so ⌘1-⌘9 did nothing until you clicked it.
