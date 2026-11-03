@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.19
+
+- ⌘N in the chat is T3 Code's own again: it opens the project picker with the cursor in its search, so typing filters the projects and ⌘1-⌘9 pick one, as in T3 Code's app. Threadside no longer takes ⌘N in the chat to start a thread in the current project; ⌘' and the New Thread button still do. Before, the picker that Threadside opened left the keyboard outside its search, so ⌘1-⌘9 did nothing until you clicked it.
+
 ## 0.3.18
 
 - ⌘1 to ⌘9, the arrows and Enter work in T3 Code's project picker when Threadside opens it (the New Thread button, ⌘N from the code, a new chat). The picker opened in the chat while the keyboard stayed with the editor, so ⌘1 and ⌘2 switched editor groups instead of picking a project. The chat now takes the keyboard whenever Threadside runs one of T3 Code's shortcuts in it.
