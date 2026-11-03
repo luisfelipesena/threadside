@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4
+
+- ⌘, or ⌘. in the chat opens T3 Code's Settings, as ⌘, does in T3 Code's desktop app (its menu never sees the key inside the editor).
+- A window that reopens brings back the thread its docked chat showed, never Settings or another page; those start over in the window's project.
+
 ## 0.3.3
 
 - T3 Code updates from the editor, nightly included. Every 30 minutes Threadside compares the server's version with T3 Code's releases on the same channel; a newer build shows an up arrow in the status bar and one **Update** offer. **T3: Update T3 Code** updates the server with T3 Code's own update call (the desktop app installs and relaunches when it runs the server), warns when threads are working, and the chat reloads into the new UI once the server is back. `threadside.checkForUpdates` turns it off.
