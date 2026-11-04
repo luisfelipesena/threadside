@@ -60,6 +60,7 @@ export class Environment implements vscode.Disposable {
   private retryDelay = 1000;
   private generation = 0;
   private rejected = 0;
+  private workspaceLocal = false;
   private readonly statusEmitter = new vscode.EventEmitter<ConnectionStatus>();
   readonly onDidChangeStatus = this.statusEmitter.event;
   status: ConnectionStatus = { kind: "idle" };
@@ -68,6 +69,11 @@ export class Environment implements vscode.Disposable {
 
   get descriptor(): EnvironmentDescriptor | undefined {
     return this.status.kind === "connected" ? this.status.descriptor : undefined;
+  }
+
+  /** Remote-SSH runs this host beside the workspace; a paired remote server does not. */
+  get ownsWorkspaceFiles(): boolean {
+    return this.status.kind === "connected" && this.workspaceLocal;
   }
 
   async connect(): Promise<void> {
@@ -80,6 +86,7 @@ export class Environment implements vscode.Disposable {
     let credential: (StoredCredential & { key: string }) | undefined;
     try {
       const target = this.resolveTarget();
+      this.workspaceLocal = target?.local === true;
       if (!target) {
         this.setStatus({
           kind: "needs-pairing",
@@ -186,6 +193,12 @@ export class Environment implements vscode.Disposable {
   stream(tag: string, payload: unknown, onChunk: (values: unknown[]) => void): Promise<unknown> {
     if (!this.rpc?.isOpen) return Promise.reject(new Error("Not connected to T3 Code."));
     return this.rpc.stream(tag, payload, onChunk).done;
+  }
+
+  /** A subscription whose lifetime is owned by its caller. */
+  subscribe(tag: string, payload: unknown, onChunk: (values: unknown[]) => void): { done: Promise<unknown>; cancel(): void } {
+    if (!this.rpc?.isOpen) throw new Error("Not connected to T3 Code.");
+    return this.rpc.stream(tag, payload, onChunk);
   }
 
   /** Sends an orchestration command such as `thread.settle`. */

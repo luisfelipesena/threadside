@@ -429,7 +429,7 @@
       event.stopImmediatePropagation();
       const id = "send-" + ++sendCount;
       const init = { key: "Enter", code: "Enter", keyCode: 13, which: 13, metaKey: event.metaKey, ctrlKey: event.ctrlKey, bubbles: true, cancelable: true };
-      pendingSend = { id, target: event.target, init, timer: setTimeout(() => finishSend(null), 400) };
+      pendingSend = { id, path: location.pathname, target: event.target, init, timer: setTimeout(() => finishSend(null), 400) };
       post({ type: "ideContextRequest", requestId: id });
     },
     true,
@@ -453,13 +453,14 @@
     pendingSend = null;
     clearTimeout(send.timer);
     const thread = location.pathname;
+    if (thread !== send.path || !send.target.isConnected) return;
     let attached = false;
     if (context && typeof context.text === "string" && sentContext.get(thread) !== context.text) {
       attached = attachContext(send.target, context);
       if (attached) sentContext.set(thread, context.text);
     }
     // The chip reaches the draft through React state; send once it has rendered.
-    setTimeout(() => send.target.dispatchEvent(new KeyboardEvent("keydown", send.init)), attached ? 60 : 0);
+    setTimeout(() => { if (location.pathname === send.path && send.target.isConnected) send.target.dispatchEvent(new KeyboardEvent("keydown", send.init)); }, attached ? 60 : 0);
   }
 
   function attachContext(target, context) {

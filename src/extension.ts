@@ -17,7 +17,8 @@ import { lockChatGroup } from "./native/chatDock";
 import { statusLabel } from "./native/threadInfo";
 import { isOpenInTab, type ThreadItem, threadPickerItems } from "./native/threadPicker";
 import { AuthProxy } from "./proxy/authProxy";
-import { threadIdFromPath, threadPath } from "./routes";
+import { AITrace } from "./native/aiTrace";
+import { threadKeyFromPath, threadIdFromPath, threadPath } from "./routes";
 import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
 
 const PORT_KEY = "threadside.proxyPort";
@@ -40,6 +41,7 @@ class Controller implements vscode.Disposable {
   private readonly statusItem: vscode.StatusBarItem;
   private readonly panels = new Set<ChatPanel>();
   private activePanel: ChatPanel | undefined;
+  private trace: AITrace | undefined;
   private originPromise: Promise<string> | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private readonly lastSeen = new Map<string, ThreadShell>();
@@ -106,6 +108,8 @@ class Controller implements vscode.Disposable {
         }
         // A tab still waiting for the first connection swaps "Connecting…" for the Connect page.
         if (status.kind === "needs-pairing" || status.kind === "error") for (const panel of this.panels) if (!panel.renderedFor) void panel.render();
+        this.trace?.connectionChanged();
+        this.publishTrace();
         this.updateStatus();
       }),
       this.environment.shell.onDidChange((ids) => {
@@ -114,12 +118,16 @@ class Controller implements vscode.Disposable {
         this.updatePanelTitles();
       }),
       vscode.workspace.onDidChangeConfiguration((event) => {
+        if (event.affectsConfiguration("threadside.aiTraceAvailable")) {
+          if (!config().get("aiTraceAvailable", true)) { this.trace?.dispose(); this.trace = undefined; }
+          this.publishTrace();
+        }
         if (event.affectsConfiguration("threadside.serverUrl") || event.affectsConfiguration("threadside.t3Home")) {
           void this.environment.connect();
         }
       }),
       vscode.window.onDidChangeActiveTextEditor((editor) => {
-        if (editor) this.lastTextEditor = editor;
+        if (editor && !this.trace?.isOpening) this.lastTextEditor = editor;
       }),
       vscode.workspace.onDidGrantWorkspaceTrust(() => void this.environment.connect()),
     );
@@ -316,6 +324,8 @@ class Controller implements vscode.Disposable {
     if (this.sideView?.path) void this.context.workspaceState.update("threadside.sidePath", this.sideView.path);
     const thread = this.activeThread();
     void vscode.commands.executeCommand("setContext", "threadside.activeHasWorktree", Boolean(thread && this.threadDir(thread)));
+    if (this.trace) this.trace.selectionChanged();
+    else this.publishTrace();
     this.updatePanelTitles();
     this.updateStatus();
   }
@@ -338,6 +348,19 @@ class Controller implements vscode.Disposable {
 
   private onBridgeMessage(panel: ChatPanel, message: BridgeMessage): void {
     switch (message.type) {
+      case "ready":
+        this.publishTrace();
+        break;
+      case "traceToggle":
+        if (config().get("aiTraceAvailable", true)) {
+          this.activePanel = panel;
+          this.ensureTrace().toggle(threadKeyFromPath(panel.path));
+        }
+        break;
+      case "traceResume":
+        this.activePanel = panel;
+        this.trace?.resume(threadKeyFromPath(panel.path));
+        break;
       case "openFile":
         this.openFile(panel, String(message.href ?? ""), Boolean(message.beside)).catch((error: unknown) => log().error(`Could not open the file link: ${error instanceof Error ? error.message : String(error)}`));
         break;
@@ -407,9 +430,36 @@ class Controller implements vscode.Disposable {
     }
   }
 
+  private ensureTrace(): AITrace {
+    if (!this.trace) {
+      this.trace = new AITrace({
+        environment: this.environment,
+        selected: () => ({ key: this.activePanel ? threadKeyFromPath(this.activePanel.path) : undefined, visible: this.activePanel?.visible ?? false }),
+        editor: () => vscode.window.activeTextEditor ?? this.lastTextEditor,
+        capture: editor => this.editorSnapshot(editor),
+        toUri: path => this.workspaceUri(path),
+        changed: () => this.publishTrace(),
+      });
+      this.disposables.push(this.trace);
+    }
+    return this.trace;
+  }
+
+  private publishTrace(): void {
+    for (const panel of this.panels) {
+      const key = threadKeyFromPath(panel.path);
+      const available = !!key && key.environmentId === this.environment.descriptor?.environmentId && this.environment.ownsWorkspaceFiles;
+      panel.post({ type: "traceState", show: config().get("aiTraceAvailable", true), ...(this.trace?.view(key) ?? {
+        enabled: false, paused: false, available, label: "Follow thread", insight: "",
+        detail: available ? "Follow the agent's file activity without leaving chat." : "Open a thread on this workspace's T3 host to follow its files.",
+      }) });
+    }
+  }
+
   /** The editor the user was last in (the chat itself has focus while they type to it). */
-  private editorSnapshot(): EditorSnapshot | undefined {
-    const editor = vscode.window.activeTextEditor ?? this.lastTextEditor;
+  private editorSnapshot(explicitEditor?: vscode.TextEditor): EditorSnapshot | undefined {
+    if (!explicitEditor && this.trace?.retainedContext) return this.trace.retainedContext;
+    const editor = explicitEditor ?? this.trace?.editorForContext(vscode.window.activeTextEditor ?? this.lastTextEditor) ?? vscode.window.activeTextEditor ?? this.lastTextEditor;
     const document = editor?.document;
     if (!editor || !document || document.isClosed || !isDiskFile(document.uri)) return undefined;
     const problemsOf = (uri: vscode.Uri): Problem[] =>
@@ -426,7 +476,7 @@ class Controller implements vscode.Disposable {
         }));
     const open = new Map<string, vscode.Uri>();
     for (const tab of vscode.window.tabGroups.all.flatMap((group) => group.tabs)) {
-      if (tab.input instanceof vscode.TabInputText && isDiskFile(tab.input.uri)) open.set(tab.input.uri.fsPath, tab.input.uri);
+      if (tab.input instanceof vscode.TabInputText && isDiskFile(tab.input.uri) && !this.trace?.isAutomaticFile(tab.input.uri)) open.set(tab.input.uri.fsPath, tab.input.uri);
     }
     const selection = editor.selection;
     const position = (at: vscode.Position) => ({ line: at.line + 1, column: at.character + 1 });
