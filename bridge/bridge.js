@@ -285,8 +285,14 @@
     if (isMac && event.ctrlKey) parts.push("ctrl");
     if (event.altKey) parts.push("alt");
     if (event.shiftKey) parts.push("shift");
-    parts.push(event.key.toLowerCase());
+    parts.push(keyName(event));
     return parts.join("+");
+  }
+  // On macOS ⌥ turns a letter into another character (⌥E is a dead key, ⌥P is π), so with ⌥ held
+  // the physical key names it, as the editor's own keybindings do.
+  function keyName(event) {
+    const physical = isMac && event.altKey && /^(?:Key|Digit)(.)$/.exec(event.code);
+    return physical ? physical[1].toLowerCase() : event.key.toLowerCase();
   }
   // T3 Code has no Ctrl+Tab binding; in the editor it is the usual key for the next tab, so here it
   // moves between threads the way T3 Code's own thread.next / thread.previous keys do.
