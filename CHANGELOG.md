@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.0
+
+- **Run T3 Code in the background**, opt-in, on macOS and Linux (Remote-SSH hosts included). The "T3 Code is not connected" page, **Connect…** and the command palette offer it: Threadside runs `t3 service install`, so the server starts at login and restarts if it stops, and the chat works without the desktop app. It explains first that the desktop app does not open while the service runs, refuses while the app or a terminal already runs a server on the same data, and **T3: Stop Running T3 Code in the Background** undoes it.
+
 ## 0.4.4
 
 - Dropping files into the chat says how. The editor lets files into the chat only while Shift is held, and its own "hold Shift" hint shows only over editor groups, so a full-screen or docked chat never showed it. The bar above the chat now reads "⇧ Hold Shift to drop files" while it has nothing else to say, and a Shift-drag covers the chat with "Drop to add to your message" instead of a thin outline around the composer.
