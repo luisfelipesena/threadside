@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.2
+
+- ⌥⌘E toggles full screen from inside the chat too. On macOS ⌥ turns the E into a dead key, so the chat saw `mod+alt+dead` and let T3 Code have it; it only worked from the editor or the chat's header. Shortcuts held with ⌥ now name the physical key, as the editor does.
+- A new window opens its chat full screen in the Secondary Side Bar, with the composer focused (`threadside.startFullScreen`, on by default; VS Code only, since Cursor has no full-screen command for that bar). ⌥⌘E goes back to the code.
+
+## 0.4.1
+
+- Reconnect when the T3 Code server comes back. When no server was running at the moment Threadside looked (the desktop app was closed or restarting, or `t3 service` was restarting it), Threadside stopped trying until the window was reloaded. It now checks for a local server every 2 s and connects as soon as one starts.
+- README: run the server without the desktop app with `t3 service install`.
+
 ## 0.4.0
 
 - Add **Follow thread**, an opt-in AI Trace control above the chat. Following starts off in each window and after reload.

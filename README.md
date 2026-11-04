@@ -42,6 +42,7 @@ Requirements: T3 Code with orchestration protocol 2 (current nightly and later r
 ## Connect
 
 - **T3 Code on the same machine** (or on the machine you are connected to with Remote-SSH): nothing to do. Threadside reads the running server from `~/.t3/userdata/server-runtime.json` and creates a session for itself with the `t3` command.
+- **No window needed:** `t3 service install` runs the server headless, starts it at login and restarts it if it stops. The desktop app does not open while the service owns `~/.t3`, so pick one per machine. Threadside connects to either, and reconnects on its own when the server starts or restarts.
 - **Another machine:** run **T3: Connect to T3 Code…** and paste a pairing link from T3 Code (**Settings → Sharing & access**) or from `t3 pair`. Use the server's Tailscale HTTPS or T3 Connect address.
 
 Each editor shows up in T3 Code under **Settings → Sharing & access** as `Threadside in <editor> (<host>)`, where you can revoke it.
@@ -56,7 +57,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 | <kbd>⌘L</kbd> | Add the selection, or the current file, to the chat |
 | <kbd>⌘'</kbd> anywhere | New thread in the repository you are in (<kbd>⌘N</kbd> in the chat is T3 Code's own: its project picker, with ⌘1-⌘9) |
 | <kbd>⇧⌘H</kbd> | Search threads, grouped as Pinned, Active, Snoozed and Settled. <kbd>↵</kbd> opens a thread in the chat, <kbd>⌘T</kbd> opens it in a new tab, and each row has **Settle** and **Open in New Tab** buttons |
-| <kbd>⌥⌘E</kbd> | Chat full width: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab |
+| <kbd>⌥⌘E</kbd> | Chat full width, from the code or from inside the chat: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab. New VS Code windows open the chat this way (`threadside.startFullScreen`) |
 | <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | In the chat: zoom in, zoom out, reset (kept per chat) |
 | <kbd>⌥⌘R</kbd> | Review the thread's changes |
 
@@ -118,7 +119,7 @@ To remove the feature's UI and runtime entirely, set `threadside.aiTraceAvailabl
 
 ## Troubleshooting
 
-- **The status bar says "T3" with a plug:** no server was found. Start T3 Code, or run **T3: Connect to T3 Code…**.
+- **The status bar says "T3" with a plug:** no server was found. Start T3 Code (or `t3 service install`), or run **T3: Connect to T3 Code…**. Threadside connects within a few seconds of the server starting.
 - **"speaks orchestration protocol N":** update T3 Code or Threadside, whichever is older.
 - **The chat shows "did not load":** press **Reload**; **Show Log** has the reason (page errors, the server's answer). Tokens are never logged.
 - **Something else looks off:** **T3: Show Log** shows what Threadside did. **T3: Reconnect** starts over.
