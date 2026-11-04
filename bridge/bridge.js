@@ -550,10 +550,30 @@
     }
     return Array.from(new Set(out));
   }
+  // The editor hides its own "hold Shift" hint outside editor groups, so the chat says what a drop does.
+  // Releasing Shift mid-drag makes the editor block the frame again without a dragleave, so the overlay
+  // also goes away once dragover stops arriving.
+  let dropOverlay;
+  let dropOverlayTimer;
   function setDropTarget(active) {
-    const editor = composer();
-    const box = editor && (editor.closest("form") || editor.parentElement);
-    if (box) box.style.outline = active ? "2px solid var(--primary, #6b8cff)" : "";
+    clearTimeout(dropOverlayTimer);
+    if (!active) return dropOverlay && dropOverlay.remove();
+    dropOverlayTimer = setTimeout(() => setDropTarget(false), 400);
+    if (!dropOverlay) {
+      dropOverlay = document.createElement("div");
+      dropOverlay.setAttribute("aria-hidden", "true");
+      dropOverlay.style.cssText =
+        "position:fixed;inset:8px;z-index:2147483647;pointer-events:none;display:grid;place-items:center;" +
+        "border:2px dashed var(--primary, #6b8cff);border-radius:12px;" +
+        "background:color-mix(in srgb, var(--background, #000) 70%, transparent);";
+      const label = document.createElement("div");
+      label.style.cssText =
+        "padding:8px 14px;border-radius:999px;font:500 13px/1.4 system-ui, sans-serif;" +
+        "background:var(--primary, #6b8cff);color:var(--primary-foreground, #fff);box-shadow:0 4px 16px rgba(0,0,0,.25);";
+      dropOverlay.append(label);
+    }
+    dropOverlay.firstChild.textContent = "Drop to add to your message";
+    if (!dropOverlay.isConnected) document.body.append(dropOverlay);
   }
   let reportedDrag = false;
   window.addEventListener(

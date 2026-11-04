@@ -268,6 +268,11 @@ function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, c
   #trace button:disabled { opacity: .6; cursor: default; }
   #trace-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vscode-descriptionForeground); }
   #trace svg { flex: none; width: 14px; height: 14px; }
+  #drop-hint { flex: none; color: var(--vscode-descriptionForeground); opacity: .75; white-space: nowrap; }
+  #trace-text:not(:empty) ~ #drop-hint { display: none; }
+  #drop-hint .short { display: none; }
+  @media (max-width: 420px) { #drop-hint .long { display: none; } #drop-hint .short { display: inline; } }
+  @media (max-width: 240px) { #drop-hint { display: none; } }
   @media (prefers-reduced-motion: no-preference) { #trace button { transition: background-color 150ms; } }
   .notice { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--vscode-editor-background); }
   .notice[hidden] { display: none; }
@@ -287,6 +292,7 @@ function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, c
     <span id="trace-label">Follow thread</span>
   </button>
   <span id="trace-text"></span>
+  <span id="drop-hint" title="The editor lets files from the Explorer, tabs or Finder into the chat only while Shift is held. They join your message as file chips.">⇧ <span class="long">Hold Shift to drop files</span><span class="short">Shift to drop</span></span>
   <button id="trace-resume" hidden>Resume</button>
 </div>
 ${
