@@ -66,15 +66,34 @@ export async function fetchDescriptor(httpBaseUrl: string, timeoutMs = 4000): Pr
   return (await response.json()) as EnvironmentDescriptor;
 }
 
-/** The `t3` CLI the desktop app installs, then any `t3` on PATH. */
+/**
+ * The `t3` that matches the running server: the background service's active runtime when `t3 service`
+ * is installed (the desktop app's copy goes stale once the app is no longer opened), then the CLI the
+ * desktop app installs, then any `t3` on PATH.
+ */
 export function findCli(t3Home: string): string | undefined {
   const names = process.platform === "win32" ? ["t3.cmd", "t3.exe", "t3.ps1"] : ["t3"];
-  const candidates = [process.env.T3CODE_CLI_PATH, ...names.map((name) => join(t3Home, "bin", name))];
+  const service = serviceRuntimeDir(t3Home);
+  const candidates = [
+    process.env.T3CODE_CLI_PATH,
+    ...(service ? names.map((name) => join(service, name)) : []),
+    ...names.map((name) => join(t3Home, "bin", name)),
+  ];
   for (const candidate of candidates) if (candidate && existsSync(candidate)) return candidate;
   for (const dir of (process.env.PATH ?? "").split(delimiter)) {
     for (const name of names) if (dir && existsSync(join(dir, name))) return join(dir, name);
   }
   return undefined;
+}
+
+function serviceRuntimeDir(t3Home: string): string | undefined {
+  try {
+    const state = JSON.parse(readFileSync(join(t3Home, "runtime", "service-state.json"), "utf8")) as { activeVersion?: unknown };
+    if (typeof state.activeVersion !== "string" || !/^[\w.-]+$/.test(state.activeVersion)) return undefined;
+    return join(t3Home, "runtime", "versions", state.activeVersion);
+  } catch {
+    return undefined;
+  }
 }
 
 export interface IssuedSession {
