@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- A Shift-drag from the editor shows T3 Code's own "Drop files to attach" frame, the one a file from Finder gets, instead of a separate overlay that did not match the chat. T3 Code draws that frame for file drags only, so Threadside hands it a stand-in; a T3 Code build that draws nothing gets the same frame from T3 Code's own classes.
+
 ## 0.5.1
 
 - A window opens the chat the way you left it. Full screen is no longer forced on every new window (`threadside.startFullScreen` is gone): the editor restores the full-screen chat for a workspace closed or reloaded that way, and the docked chat otherwise.
