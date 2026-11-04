@@ -92,6 +92,7 @@ export class Environment implements vscode.Disposable {
           kind: "needs-pairing",
           reason: "No T3 Code server runs on this machine. Start T3 Code, or connect to another machine with a pairing link.",
         });
+        this.waitForLocalServer(generation);
         return;
       }
       const descriptor = await fetchDescriptor(target.httpBaseUrl);
@@ -301,6 +302,16 @@ export class Environment implements vscode.Disposable {
     );
     this.setStatus({ kind: "connected", descriptor, httpBaseUrl: target.httpBaseUrl, target });
     log().info(`Connected to ${descriptor.label} (T3 Code ${descriptor.serverVersion}).`);
+  }
+
+  /** The app or `t3 service` may start the server later, or restart it; connect as soon as it is up. */
+  private waitForLocalServer(generation: number): void {
+    clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      if (generation !== this.generation) return;
+      if (this.resolveTarget()) void this.connect();
+      else this.waitForLocalServer(generation);
+    }, 2_000);
   }
 
   private scheduleRetry(generation: number, delay = this.retryDelay): void {
