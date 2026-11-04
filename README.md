@@ -57,7 +57,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 | <kbd>⌘L</kbd> | Add the selection, or the current file, to the chat |
 | <kbd>⌘'</kbd> anywhere | New thread in the repository you are in (<kbd>⌘N</kbd> in the chat is T3 Code's own: its project picker, with ⌘1-⌘9) |
 | <kbd>⇧⌘H</kbd> | Search threads, grouped as Pinned, Active, Snoozed and Settled. <kbd>↵</kbd> opens a thread in the chat, <kbd>⌘T</kbd> opens it in a new tab, and each row has **Settle** and **Open in New Tab** buttons |
-| <kbd>⌥⌘E</kbd> | Chat full width, from the code or from inside the chat: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab. New VS Code windows open the chat this way (`threadside.startFullScreen`) |
+| <kbd>⌥⌘E</kbd> | Chat full width, from the code or from inside the chat: in VS Code the Secondary Side Bar maximizes in place; elsewhere the thread opens in a full editor tab. Each window reopens the way you left it: full screen if you closed or reloaded it full screen, the docked chat otherwise |
 | <kbd>⌘+</kbd> / <kbd>⌘-</kbd> / <kbd>⌘0</kbd> | In the chat: zoom in, zoom out, reset (kept per chat) |
 | <kbd>⌥⌘R</kbd> | Review the thread's changes |
 
