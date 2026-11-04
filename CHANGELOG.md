@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.4
+
+- Removed the chat's unused drag-type report. A drag from the editor still needs Shift: the editor blocks every extension view during its own drags until Shift is held, so no extension can show a drop style before that. Files from Finder are not blocked.
+
 ## 0.5.3
 
 - A Shift-drag from the editor outlines the message box again, as before 0.4.4 and as Cline does, now following the box's rounded corners. The 0.4.4 overlay and the 0.5.2 stand-in for T3 Code's own frame are gone: neither showed reliably in a real editor drag, and the stand-in leaned on T3 Code internals. Files from Finder keep T3 Code's own frame, which needs no Shift.
