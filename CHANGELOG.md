@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.3
+
+- With `t3 service` installed, Threadside issues its session with the service's own `t3` (the version the server runs). The desktop app's copy in `~/.t3/bin` stops updating once the app is no longer opened.
+
 ## 0.4.2
 
 - ⌥⌘E toggles full screen from inside the chat too. On macOS ⌥ turns the E into a dead key, so the chat saw `mod+alt+dead` and let T3 Code have it; it only worked from the editor or the chat's header. Shortcuts held with ⌥ now name the physical key, as the editor does.
