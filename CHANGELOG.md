@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- A window opens the chat the way you left it. Full screen is no longer forced on every new window (`threadside.startFullScreen` is gone): the editor restores the full-screen chat for a workspace closed or reloaded that way, and the docked chat otherwise.
+- ⌘I (or whatever opens the chat) leaves the cursor in the message box. The composer was focused only if it had already mounted and before the editor focused the view; it now waits for both.
+- Shortcuts follow your keybindings. Rules for `threadside.*` commands in keybindings.json also work while the chat has focus, picked up as soon as the file changes, so rebinding the chat's toggle needs no second setting. `threadside.chatShortcuts` still holds the defaults and any editor command you add.
+
 ## 0.5.0
 
 - **Run T3 Code in the background**, opt-in, on macOS and Linux (Remote-SSH hosts included). The "T3 Code is not connected" page, **Connect…** and the command palette offer it: Threadside runs `t3 service install`, so the server starts at login and restarts if it stops, and the chat works without the desktop app. It explains first that the desktop app does not open while the service runs, refuses while the app or a terminal already runs a server on the same data, and **T3: Stop Running T3 Code in the Background** undoes it.
