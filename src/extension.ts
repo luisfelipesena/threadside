@@ -404,9 +404,6 @@ class Controller implements vscode.Disposable {
       case "command":
         if (message.command === "newThread") void this.newThread();
         break;
-      case "dragTypes":
-        log().debug(`Drag over chat with types: ${String(message.types)}`);
-        break;
       case "focus":
         this.activePanel = panel;
         this.onPanelChanged();

@@ -550,9 +550,6 @@
     }
     return Array.from(new Set(out));
   }
-  // While a Shift-drag from the editor is over the chat, the composer gets an outline, as in Cline.
-  // Releasing Shift mid-drag makes the editor block the frame again without a dragleave, so the
-  // outline also goes away once dragover stops arriving.
   // The composer's rounded card, so the outline follows its corners.
   function composerBox() {
     const editor = composer();
@@ -561,6 +558,9 @@
     }
     return editor && (editor.closest("form") || editor.parentElement);
   }
+  // While a Shift-drag from the editor is over the chat, the composer gets an outline, as in Cline.
+  // Releasing Shift mid-drag makes the editor block the frame again without a dragleave, so the
+  // outline also goes away once dragover stops arriving.
   let dropOutlineTimer;
   function setDropTarget(active) {
     clearTimeout(dropOutlineTimer);
@@ -570,17 +570,6 @@
     box.style.outlineOffset = active ? "1px" : "";
     if (active) dropOutlineTimer = setTimeout(() => setDropTarget(false), 1000);
   }
-  let reportedDrag = false;
-  window.addEventListener(
-    "dragenter",
-    (event) => {
-      if (reportedDrag || !event.dataTransfer) return;
-      reportedDrag = true;
-      post({ type: "dragTypes", types: Array.from(event.dataTransfer.types) });
-    },
-    true,
-  );
-  window.addEventListener("drop", () => (reportedDrag = false), true);
   for (const type of ["dragenter", "dragover"]) {
     window.addEventListener(
       type,
