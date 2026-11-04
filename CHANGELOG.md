@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.21
+
+- A new window opens its chat in that window's project in Remote-SSH too. The chat reports ready before T3 Code has mounted, and through an SSH tunnel the composer could take more than the 5 s Threadside waited for it, so the new thread was never started and T3 Code's start page stayed on its first project. It now waits up to 30 s for the composer and 15 s for the project in the picker, logs which project it starts the draft in, and logs when either wait runs out.
+
 ## 0.3.20
 
 - Media converts only where the editor needs it. The chat reports whether the editor decodes AAC: Cursor does, so its videos play as T3 Code sends them, with no ffmpeg; VS Code does not, so its MP4 and M4A media are converted. MOV files (usually HEVC from an iPhone) are converted in both.
