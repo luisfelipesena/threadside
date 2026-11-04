@@ -372,7 +372,13 @@ ${
   document.getElementById("log").addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
 
   // Keys typed into the tab belong to the chat, so focus always moves on into the frame.
-  window.addEventListener("focus", () => { if (!trace.contains(document.activeElement)) frame.focus(); });
+  // ⌘I asks for the composer before the editor has focused this view; when the view gets focus, it goes on to the composer.
+  let composerFocusUntil = 0;
+  window.addEventListener("focus", () => {
+    if (trace.contains(document.activeElement)) return;
+    frame.focus();
+    if (Date.now() < composerFocusUntil) frame.contentWindow.postMessage({ source: "threadside-host", type: "focusComposer" }, origin);
+  });
   document.addEventListener("mousedown", (event) => { if (errorBox.hidden && !event.target.closest("#trace")) frame.focus(); });
 
   // The editor's live theme colors, read from the webview's --vscode-* variables.
@@ -430,6 +436,7 @@ ${
     // These hand the keyboard to T3 Code: a picker a shortcut opens takes its own keys (⌘1-⌘9, arrows,
     // Enter) only while focus is inside its frame; otherwise the editor gets them.
     if (["focusComposer", "insert", "mentions", "shortcut"].includes(data.type)) frame.focus();
+    if (data.type === "focusComposer") composerFocusUntil = Date.now() + 2000;
     if (data.type === "config") matchColors = data.matchEditorColors !== false;
     frame.contentWindow.postMessage(data, origin);
     // The webview updates its --vscode-* variables after a theme change; read them next frame.

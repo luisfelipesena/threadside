@@ -854,11 +854,12 @@
       case "insert":
         insertText(String(message.text || ""));
         break;
-      case "focusComposer": {
-        const editor = composer();
-        if (editor) editor.focus();
+      case "focusComposer":
+        // The chat may still be mounting (first open, or a hidden view the editor recreated).
+        whenComposer((editor) => {
+          if (document.activeElement !== editor) editor.focus();
+        });
         break;
-      }
       case "ideContext":
         if (pendingSend && pendingSend.id === message.requestId) finishSend(message.context);
         break;
