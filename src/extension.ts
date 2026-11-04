@@ -19,7 +19,7 @@ import { isOpenInTab, type ThreadItem, threadPickerItems } from "./native/thread
 import { AuthProxy } from "./proxy/authProxy";
 import { AITrace } from "./native/aiTrace";
 import { threadKeyFromPath, threadIdFromPath, threadPath } from "./routes";
-import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, VIEW_TYPE } from "./webview/chatPanel";
+import { type BridgeMessage, ChatPanel, SIDE_VIEW_ID, setExtensionUri, setUserKeybindingsFile, userKeybindingsDidChange, VIEW_TYPE } from "./webview/chatPanel";
 
 const PORT_KEY = "threadside.proxyPort";
 const DOCKED_KEY = "threadside.dockedOnRight";
@@ -28,6 +28,19 @@ const CLOSER_KEY = "threadside.dockCloser";
 
 export function activate(context: vscode.ExtensionContext): void {
   setExtensionUri(context.extensionUri);
+  // The editor names its User folder `vscode-userdata:` (older builds `file:`); either is a local path here.
+  const storage = context.globalStorageUri;
+  if (!vscode.env.remoteName && (storage.scheme === "file" || storage.scheme === "vscode-userdata")) {
+    const userDir = vscode.Uri.joinPath(vscode.Uri.file(storage.path), "..", "..");
+    const file = join(userDir.fsPath, "keybindings.json");
+    setUserKeybindingsFile(file);
+    log().info(`Chat shortcuts follow the Threadside rules in ${file}.`);
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(userDir, "keybindings.json"));
+    watcher.onDidChange(userKeybindingsDidChange);
+    watcher.onDidCreate(userKeybindingsDidChange);
+    watcher.onDidDelete(userKeybindingsDidChange);
+    context.subscriptions.push(watcher);
+  }
   const controller = new Controller(context);
   context.subscriptions.push(controller);
   void controller.start();

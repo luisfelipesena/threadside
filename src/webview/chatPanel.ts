@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import * as vscode from "vscode";
 import { backgroundServiceSupported, resolveT3Home } from "../connection/discovery";
 import type { Environment } from "../connection/environment";
 import { t3Shortcut } from "../connection/t3Keys";
+import { withUserChatKeys } from "../keybindings/chatKeys";
 import { log } from "../log";
 import type { AuthProxy } from "../proxy/authProxy";
 import { threadIdFromPath } from "../routes";
@@ -15,10 +17,32 @@ interface PanelState {
   path?: string;
 }
 
-/** Shortcuts that run editor commands while the chat has focus, from `threadside.chatShortcuts`. */
+let userKeybindingsFile: string | undefined;
+const keybindingListeners = new Set<() => void>();
+/** The user's keybindings.json when it is on this machine (a local window), and a signal when it changes. */
+export function setUserKeybindingsFile(path: string | undefined): void {
+  userKeybindingsFile = path;
+}
+export function userKeybindingsDidChange(): void {
+  for (const listener of keybindingListeners) listener();
+}
+
+/**
+ * Shortcuts that run editor commands while the chat has focus: `threadside.chatShortcuts`, plus the
+ * user's own keybindings.json rules for Threadside commands.
+ */
 export function chatShortcuts(): Record<string, string> {
   const map = vscode.workspace.getConfiguration("threadside").get<Record<string, string>>("chatShortcuts", {});
-  return Object.fromEntries(Object.entries(map).filter(([chord, command]) => chord && typeof command === "string" && command));
+  const base = Object.fromEntries(Object.entries(map).filter(([chord, command]) => chord && typeof command === "string" && command));
+  if (!userKeybindingsFile) return base;
+  let text: string | undefined;
+  try {
+    text = readFileSync(userKeybindingsFile, "utf8");
+  } catch {
+    return base;
+  }
+  // Read only in a local window, so the screen's platform is this process's.
+  return withUserChatKeys(base, text, process.platform === "darwin" ? "mac" : "other");
 }
 
 export interface BridgeMessage {
@@ -69,6 +93,7 @@ export class ChatPanel {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("threadside")) this.postConfig();
       }),
+      this.onUserKeybindings(() => this.postConfig()),
     );
     void this.render();
   }
@@ -131,6 +156,11 @@ export class ChatPanel {
 
   insertMentions(mentions: string[]): void {
     this.post({ type: "mentions", mentions });
+  }
+
+  private onUserKeybindings(listener: () => void): vscode.Disposable {
+    keybindingListeners.add(listener);
+    return { dispose: () => keybindingListeners.delete(listener) };
   }
 
   focusComposer(): void {

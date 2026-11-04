@@ -511,7 +511,7 @@
             "mod+shift+x": "workbench.view.extensions",
             "ctrl+`": "workbench.action.terminal.toggleTerminal"
           },
-          "markdownDescription": "While the chat has focus, these shortcuts run editor commands instead of going to T3 Code. Keys are written like `mod+shift+p` (`mod` is ⌘ on macOS and Ctrl elsewhere; on macOS `ctrl` is the Control key). Every other shortcut goes to T3 Code (⌘K palette, ⌘B sidebar, ⌘F find, model and host pickers…). Remove an entry to give that key back to T3 Code."
+          "markdownDescription": "While the chat has focus, these shortcuts run editor commands instead of going to T3 Code. Your own keybindings.json rules for `threadside.*` commands join this list on their own, so a Threadside shortcut you rebind (for example the chat's ⌘I) works inside the chat too; a `-threadside.…` rule removes one. Keys are written like `mod+shift+p` (`mod` is ⌘ on macOS and Ctrl elsewhere; on macOS `ctrl` is the Control key). Every other shortcut goes to T3 Code (⌘K palette, ⌘B sidebar, ⌘F find, model and host pickers…). Remove an entry to give that key back to T3 Code."
         },
         "threadside.sendEditorContext": {
           "type": "boolean",
