@@ -17,7 +17,12 @@ export interface LocalServer {
   httpBaseUrl: string;
   serverVersion: string | undefined;
   t3Home: string;
+  /** Run by `t3 service` rather than the desktop app or a terminal. */
+  serviceManaged: boolean;
 }
+
+/** `t3 service` installs a launchd agent on macOS and a systemd user unit on Linux; it has nothing for Windows. */
+export const backgroundServiceSupported = process.platform === "darwin" || process.platform === "linux";
 
 export const SUPPORTED_PROTOCOL = 2;
 
@@ -46,12 +51,14 @@ export function findLocalServer(t3Home: string): LocalServer | undefined {
       origin?: string;
       pid?: number;
       serverVersion?: string;
+      serviceManaged?: boolean;
     };
     if (!pidAlive(runtime.pid) || typeof runtime.port !== "number") return undefined;
     return {
       httpBaseUrl: `http://127.0.0.1:${runtime.port}`,
       serverVersion: runtime.serverVersion,
       t3Home,
+      serviceManaged: runtime.serviceManaged === true,
     };
   } catch {
     return undefined;
@@ -94,6 +101,17 @@ function serviceRuntimeDir(t3Home: string): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+/** Installs or removes the background service (`t3 service install|uninstall`); resolves with its output. */
+export function runBackgroundService(cli: string, t3Home: string, action: "install" | "uninstall"): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(cli, ["service", action], { env: { ...process.env, T3CODE_HOME: t3Home }, timeout: 180_000, maxBuffer: 1 << 20 }, (error, stdout, stderr) => {
+      const output = `${stdout}${stderr}`.trim();
+      if (error) reject(new Error(output.split("\n").filter(Boolean).pop() ?? error.message));
+      else resolve(output);
+    });
+  });
 }
 
 export interface IssuedSession {

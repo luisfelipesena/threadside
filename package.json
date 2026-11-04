@@ -202,6 +202,16 @@
         "category": "T3"
       },
       {
+        "command": "threadside.runInBackground",
+        "title": "Run T3 Code in the Background",
+        "category": "T3"
+      },
+      {
+        "command": "threadside.stopBackground",
+        "title": "Stop Running T3 Code in the Background",
+        "category": "T3"
+      },
+      {
         "command": "threadside.takeOverShortcuts",
         "title": "Use T3 for Cursor Chat Shortcuts",
         "category": "T3"

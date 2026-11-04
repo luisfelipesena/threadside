@@ -42,7 +42,7 @@ Requirements: T3 Code with orchestration protocol 2 (current nightly and later r
 ## Connect
 
 - **T3 Code on the same machine** (or on the machine you are connected to with Remote-SSH): nothing to do. Threadside reads the running server from `~/.t3/userdata/server-runtime.json` and creates a session for itself with the `t3` command.
-- **No window needed:** `t3 service install` runs the server headless, starts it at login and restarts it if it stops. The desktop app does not open while the service owns `~/.t3`, so pick one per machine. Threadside connects to either, and reconnects on its own when the server starts or restarts.
+- **No app needed (macOS, Linux):** click **Run in Background** on the "not connected" page, or run **T3: Run T3 Code in the Background**. Threadside installs `t3 service`: the server starts at login and restarts if it stops. The desktop app does not open while the service owns `~/.t3`, so pick one per machine; **T3: Stop Running T3 Code in the Background** goes back. Threadside connects to either, and reconnects on its own when the server starts or restarts.
 - **Another machine:** run **T3: Connect to T3 Code…** and paste a pairing link from T3 Code (**Settings → Sharing & access**) or from `t3 pair`. Use the server's Tailscale HTTPS or T3 Connect address.
 
 Each editor shows up in T3 Code under **Settings → Sharing & access** as `Threadside in <editor> (<host>)`, where you can revoke it.
@@ -119,7 +119,7 @@ To remove the feature's UI and runtime entirely, set `threadside.aiTraceAvailabl
 
 ## Troubleshooting
 
-- **The status bar says "T3" with a plug:** no server was found. Start T3 Code (or `t3 service install`), or run **T3: Connect to T3 Code…**. Threadside connects within a few seconds of the server starting.
+- **The status bar says "T3" with a plug:** no server was found. Open T3 Code, click **Run in Background**, or run **T3: Connect to T3 Code…**. Threadside connects within a few seconds of the server starting.
 - **"speaks orchestration protocol N":** update T3 Code or Threadside, whichever is older.
 - **The chat shows "did not load":** press **Reload**; **Show Log** has the reason (page errors, the server's answer). Tokens are never logged.
 - **Something else looks off:** **T3: Show Log** shows what Threadside did. **T3: Reconnect** starts over.

@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { basename, join, relative as relativePath } from "node:path";
 import * as vscode from "vscode";
-import { resolveT3Home } from "./connection/discovery";
+import { backgroundServiceSupported, findCli, findLocalServer, resolveT3Home, runBackgroundService } from "./connection/discovery";
 import { Environment, parsePairingInput } from "./connection/environment";
 import { notificationTag, sidebarProjectKey } from "./connection/projectKey";
 import { isRunning, isSettled, limitResetAt, type ProjectShell, type ThreadShell } from "./connection/shell";
@@ -687,6 +687,8 @@ class Controller implements vscode.Disposable {
     command("threadside.openSettings", () => this.openChat({ path: "/settings/general" }));
     command("threadside.refresh", () => this.environment.connect());
     command("threadside.connect", () => this.connectFlow());
+    command("threadside.runInBackground", () => this.runInBackground());
+    command("threadside.stopBackground", () => this.stopBackground());
     command("threadside.disconnect", async () => {
       const ok = await vscode.window.showWarningMessage(
         "Disconnect Threadside from T3 Code and forget this editor's credential?",
@@ -1046,17 +1048,109 @@ class Controller implements vscode.Disposable {
     pick.show();
   }
 
+  /**
+   * Opt-in: runs this machine's T3 Code server as `t3 service` (started at login, restarted when it stops),
+   * so the chat works without the desktop app. The app refuses to open while the service owns its data
+   * directory, so the choice is explicit and reversible with `threadside.stopBackground`.
+   */
+  private async runInBackground(): Promise<void> {
+    if (!backgroundServiceSupported) {
+      void vscode.window.showWarningMessage("Running T3 Code in the background needs macOS or Linux. Keep the T3 Code app open instead.");
+      return;
+    }
+    const t3Home = resolveT3Home(config().get("t3Home", ""));
+    const running = findLocalServer(t3Home);
+    if (running?.serviceManaged) {
+      void vscode.window.showInformationMessage("T3 Code already runs in the background on this machine.");
+      return this.environment.connect();
+    }
+    if (running) {
+      void vscode.window.showWarningMessage(
+        "T3 Code is already running on this machine, in the desktop app or a terminal. Quit it first: it and the background service cannot share the same T3 Code data.",
+      );
+      return;
+    }
+    const cli = findCli(t3Home);
+    if (!cli) {
+      const copy = await vscode.window.showWarningMessage(
+        "Threadside could not find the `t3` command. Install T3 Code, or run `npx t3@latest service install` in a terminal.",
+        "Copy Command",
+      );
+      if (copy) await vscode.env.clipboard.writeText("npx t3@latest service install");
+      return;
+    }
+    const remote = config().get<string>("serverUrl", "").trim();
+    const answer = await vscode.window.showInformationMessage(
+      "Run T3 Code in the background on this machine?",
+      {
+        modal: true,
+        detail:
+          "The T3 Code server starts when you log in and restarts if it stops, so the chat works without the desktop app. " +
+          "While it runs, the desktop app does not open on this machine. " +
+          (remote ? `This editor stops using ${remote} and connects to this machine. ` : "") +
+          "Stop it any time with “T3: Stop Running T3 Code in the Background”.",
+      },
+      "Run in Background",
+    );
+    if (answer !== "Run in Background") return;
+    if (remote) await config().update("serverUrl", "", vscode.ConfigurationTarget.Global);
+    try {
+      const output = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: "Starting T3 Code in the background…" },
+        () => runBackgroundService(cli, t3Home, "install"),
+      );
+      log().info(`t3 service install: ${output.split("\n")[0] ?? "done"}`);
+      void vscode.window.showInformationMessage("T3 Code now runs in the background. It starts with your login, no app needed.");
+    } catch (error) {
+      log().error(`t3 service install failed: ${error instanceof Error ? error.message : String(error)}`);
+      void vscode.window.showErrorMessage(`T3 Code could not start in the background: ${error instanceof Error ? error.message : String(error)}`, "Show Log").then((pick) => {
+        if (pick) log().show();
+      });
+      return;
+    }
+    await this.environment.connect();
+  }
+
+  private async stopBackground(): Promise<void> {
+    if (!backgroundServiceSupported) return;
+    const t3Home = resolveT3Home(config().get("t3Home", ""));
+    const cli = findCli(t3Home);
+    if (!cli) {
+      void vscode.window.showWarningMessage("Threadside could not find the `t3` command. Run `t3 service uninstall` in a terminal.");
+      return;
+    }
+    const answer = await vscode.window.showWarningMessage(
+      "Stop running T3 Code in the background?",
+      { modal: true, detail: "Agents working on this machine stop, and the chat disconnects until you open the T3 Code app or run it in the background again." },
+      "Stop",
+    );
+    if (answer !== "Stop") return;
+    try {
+      await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: "Stopping T3 Code…" }, () =>
+        runBackgroundService(cli, t3Home, "uninstall"),
+      );
+      log().info("t3 service uninstall: done");
+      void vscode.window.showInformationMessage("T3 Code no longer runs in the background. Open the T3 Code app to use the chat.");
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Could not stop the background service: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
   private async connectFlow(): Promise<void> {
-    type Item = vscode.QuickPickItem & { action: "local" | "link" | "url" };
+    type Item = vscode.QuickPickItem & { action: "local" | "background" | "link" | "url" };
     const choice = await vscode.window.showQuickPick<Item>(
       [
         { label: "$(vm) This machine", detail: "Use the T3 Code server running where this workspace lives. No setup needed.", action: "local" },
+        ...(backgroundServiceSupported
+          ? [{ label: "$(server-process) Run in the background here", detail: "Start T3 Code's server at login, without the desktop app.", action: "background" as const }]
+          : []),
         { label: "$(link) Pairing link", detail: "Paste a link from T3 Code → Settings → Sharing & access, or from `t3 pair`.", action: "link" },
         { label: "$(globe) Server address", detail: "Set the server URL (Tailscale HTTPS or T3 Connect), then pair.", action: "url" },
       ],
       { title: "Connect to T3 Code" },
     );
     if (!choice) return;
+    if (choice.action === "background") return this.runInBackground();
     if (choice.action === "local") {
       await config().update("serverUrl", "", vscode.ConfigurationTarget.Global);
       await this.environment.connect();

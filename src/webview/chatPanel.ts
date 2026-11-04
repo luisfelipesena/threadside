@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import * as vscode from "vscode";
-import { resolveT3Home } from "../connection/discovery";
+import { backgroundServiceSupported, resolveT3Home } from "../connection/discovery";
 import type { Environment } from "../connection/environment";
 import { t3Shortcut } from "../connection/t3Keys";
 import { log } from "../log";
@@ -199,6 +199,9 @@ export class ChatPanel {
       case "connect":
         void vscode.commands.executeCommand("threadside.connect");
         break;
+      case "runInBackground":
+        void vscode.commands.executeCommand("threadside.runInBackground");
+        break;
       case "focus":
         this.focused = true;
         break;
@@ -303,8 +306,14 @@ ${
       ? `<div id="loading" class="notice"><p>Connecting to T3 Code…</p></div>`
       : `<div id="offline" class="notice"><div>
   <p><strong>T3 Code is not connected</strong></p>
-  <p class="muted">Use the T3 Code server on this machine, or pair with one on another.</p>
-  <div class="actions"><button id="connect" class="primary">Connect…</button><button id="offline-log">Show Log</button></div>
+  <p class="muted">${
+        backgroundServiceSupported
+          ? "Open the T3 Code app, run T3 Code in the background here (no app needed), or pair with a server on another machine."
+          : "Open the T3 Code app on this machine, or pair with a server on another."
+      }</p>
+  <div class="actions">${
+    backgroundServiceSupported ? `<button id="background" class="primary">Run in Background</button><button id="connect">Connect…</button>` : `<button id="connect" class="primary">Connect…</button>`
+  }<button id="offline-log">Show Log</button></div>
 </div></div>`
 }
 <div id="error" class="notice" hidden>
@@ -329,6 +338,7 @@ ${
   traceSize.observe(trace);
   if (!frame) {
     document.getElementById("connect")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "connect" }));
+    document.getElementById("background")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "runInBackground" }));
     document.getElementById("offline-log")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "showLog" }));
     return;
   }
