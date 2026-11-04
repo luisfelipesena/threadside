@@ -550,30 +550,46 @@
     }
     return Array.from(new Set(out));
   }
-  // The editor hides its own "hold Shift" hint outside editor groups, so the chat says what a drop does.
-  // Releasing Shift mid-drag makes the editor block the frame again without a dragleave, so the overlay
-  // also goes away once dragover stops arriving.
+  // While Shift is held over the chat, show T3 Code's own "Drop files to attach" frame, the one a file
+  // from Finder gets: T3 Code draws it for file drags only, so it gets a stand-in file drag. If this T3
+  // Code build draws nothing, the same frame is drawn here from T3 Code's own classes. Releasing Shift
+  // mid-drag makes the editor block the frame again without a dragleave, so the frame also goes away
+  // once dragover stops arriving.
+  let dropShown = false;
   let dropOverlay;
   let dropOverlayTimer;
+  function standInDrag(type) {
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([""], "threadside-drop"));
+    return new DragEvent(type, { dataTransfer: transfer, bubbles: true, cancelable: true });
+  }
   function setDropTarget(active) {
     clearTimeout(dropOverlayTimer);
-    if (!active) return dropOverlay && dropOverlay.remove();
-    dropOverlayTimer = setTimeout(() => setDropTarget(false), 400);
-    if (!dropOverlay) {
-      dropOverlay = document.createElement("div");
-      dropOverlay.setAttribute("aria-hidden", "true");
-      dropOverlay.style.cssText =
-        "position:fixed;inset:8px;z-index:2147483647;pointer-events:none;display:grid;place-items:center;" +
-        "border:2px dashed var(--primary, #6b8cff);border-radius:12px;" +
-        "background:color-mix(in srgb, var(--background, #000) 70%, transparent);";
-      const label = document.createElement("div");
-      label.style.cssText =
-        "padding:8px 14px;border-radius:999px;font:500 13px/1.4 system-ui, sans-serif;" +
-        "background:var(--primary, #6b8cff);color:var(--primary-foreground, #fff);box-shadow:0 4px 16px rgba(0,0,0,.25);";
-      dropOverlay.append(label);
+    const target = composer() || document.body;
+    if (!active) {
+      if (dropShown) target.dispatchEvent(standInDrag("dragleave"));
+      if (dropOverlay) dropOverlay.remove();
+      dropShown = false;
+      return;
     }
-    dropOverlay.firstChild.textContent = "Drop to add to your message";
-    if (!dropOverlay.isConnected) document.body.append(dropOverlay);
+    dropOverlayTimer = setTimeout(() => setDropTarget(false), 400);
+    if (dropShown) return;
+    dropShown = true;
+    target.dispatchEvent(standInDrag("dragenter"));
+    requestAnimationFrame(() => {
+      if (!dropShown || document.querySelector("[data-chat-workspace-drop-overlay]")) return;
+      if (!dropOverlay) {
+        dropOverlay = document.createElement("div");
+        dropOverlay.className =
+          "pointer-events-none fixed inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/[0.035]";
+        const label = document.createElement("div");
+        label.setAttribute("role", "status");
+        label.className = "flex items-center gap-2 rounded-full border border-primary/25 bg-background/95 px-4 py-2.5 text-sm font-medium text-foreground shadow-lg";
+        label.textContent = "Drop files to attach";
+        dropOverlay.append(label);
+      }
+      document.body.append(dropOverlay);
+    });
   }
   let reportedDrag = false;
   window.addEventListener(
