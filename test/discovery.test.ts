@@ -5,6 +5,9 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { findCli } from "../src/connection/discovery.ts";
 
+// An explicit CLI path wins over discovery; agents running under T3 Code have one set.
+delete process.env.T3CODE_CLI_PATH;
+
 function home(): string {
   const dir = mkdtempSync(join(tmpdir(), "t3home-"));
   mkdirSync(join(dir, "bin"));
