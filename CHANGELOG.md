@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.3
+
+- A Shift-drag from the editor outlines the message box again, as before 0.4.4 and as Cline does, now following the box's rounded corners. The 0.4.4 overlay and the 0.5.2 stand-in for T3 Code's own frame are gone: neither showed reliably in a real editor drag, and the stand-in leaned on T3 Code internals. Files from Finder keep T3 Code's own frame, which needs no Shift.
+
 ## 0.5.2
 
 - A Shift-drag from the editor shows T3 Code's own "Drop files to attach" frame, the one a file from Finder gets, instead of a separate overlay that did not match the chat. T3 Code draws that frame for file drags only, so Threadside hands it a stand-in; a T3 Code build that draws nothing gets the same frame from T3 Code's own classes.
