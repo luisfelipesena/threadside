@@ -167,8 +167,26 @@ class Controller implements vscode.Disposable {
       await new Promise((resolve) => setTimeout(resolve, at));
       if (this.userHidSideView) return;
       await vscode.commands.executeCommand(`${SIDE_VIEW_ID}.focus`).then(undefined, (error: Error) => log().warn(`Could not show the chat: ${error.message}`));
+      if (await this.startFullScreen()) return;
       await vscode.commands.executeCommand("workbench.action.focusActiveEditorGroup");
     }
+  }
+
+  /**
+   * `threadside.startFullScreen`: a new window's chat fills the window from the Secondary Side Bar, with
+   * the composer focused. Uses the editor's maximize, not its toggle, so a bar the editor restored
+   * maximized stays that way. Cursor has no such command, so its chat opens as before.
+   */
+  private async startFullScreen(): Promise<boolean> {
+    if (!config().get("startFullScreen", true)) return false;
+    if (this.context.globalState.get(CLOSER_KEY) !== "workbench.action.toggleAuxiliaryBar") return false;
+    if (!(await vscode.commands.getCommands(true)).includes("workbench.action.maximizeAuxiliaryBar")) return false;
+    const chat = await this.showSideView(true).catch(() => undefined);
+    if (!chat?.visible || this.userHidSideView) return false;
+    await vscode.commands.executeCommand("workbench.action.maximizeAuxiliaryBar");
+    chat.focusComposer();
+    log().info("Opened the chat full screen.");
+    return true;
   }
 
   /** The editor restores the docked chat with the layout, even in a new empty window; hide it there once. */

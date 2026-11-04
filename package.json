@@ -436,6 +436,11 @@
           "default": true,
           "description": "Show the chat when a window with a folder starts, in place of Cursor's own agent pane, which Cursor reopens on every start. The code keeps the focus. A window with no folder keeps Cursor's start page."
         },
+        "threadside.startFullScreen": {
+          "type": "boolean",
+          "default": true,
+          "description": "When the chat opens with a new window, open it full screen in the Secondary Side Bar with the composer focused. ⌥⌘E goes back to the code. VS Code only: Cursor has no full-screen command for that bar."
+        },
         "threadside.createProjectForFolder": {
           "type": "boolean",
           "default": true,
