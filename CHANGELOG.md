@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.4
+
+- Dropping files into the chat says how. The editor lets files into the chat only while Shift is held, and its own "hold Shift" hint shows only over editor groups, so a full-screen or docked chat never showed it. The bar above the chat now reads "⇧ Hold Shift to drop files" while it has nothing else to say, and a Shift-drag covers the chat with "Drop to add to your message" instead of a thin outline around the composer.
+
 ## 0.4.3
 
 - With `t3 service` installed, Threadside issues its session with the service's own `t3` (the version the server runs). The desktop app's copy in `~/.t3/bin` stops updating once the app is no longer opened.
