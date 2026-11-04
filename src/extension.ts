@@ -796,7 +796,9 @@ class Controller implements vscode.Disposable {
   private async startDraft(chat: ChatPanel): Promise<void> {
     await this.shellReady();
     const project = await this.ensureWorkspaceProject();
-    if (project) this.runT3Shortcut(chat, "chat.new", project.title);
+    if (!project) return;
+    log().info(`Starting a draft in ${project.title} (${basename(project.workspaceRoot)}).`);
+    this.runT3Shortcut(chat, "chat.new", project.title);
   }
 
   /** A restored thread stays only while it belongs to this window's code; otherwise a draft starts there. */

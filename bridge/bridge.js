@@ -596,13 +596,16 @@
     return document.querySelector('[data-testid="composer-editor"]');
   }
 
+  // "ready" goes out at DOMContentLoaded, before T3 Code mounts and loads its data; through a
+  // Remote-SSH tunnel that takes several seconds, so the wait is generous and a give-up is logged.
   function whenComposer(run, attempt) {
     // A long draft collapses the composer into a preview; open it before typing into it.
     const expand = document.querySelector('button[aria-label="Expand composer"]');
     if (expand) expand.click();
     const editor = composer();
     if (editor) return run(editor);
-    if ((attempt || 0) < 50) setTimeout(() => whenComposer(run, (attempt || 0) + 1), 100);
+    if ((attempt || 0) < 300) setTimeout(() => whenComposer(run, (attempt || 0) + 1), 100);
+    else reportError("The chat composer did not appear within 30 s", location.pathname);
   }
 
   // File chips go through the composer's own drop handler, the path T3 Code's file tree uses.
@@ -750,7 +753,11 @@
     const titleOf = (item) => ((item.querySelector(".truncate") || item).textContent || "").trim();
     let attempt = 0;
     (function step() {
-      if (userActed || attempt++ > 60) return finish();
+      if (userActed) return finish();
+      if (attempt++ > 300) {
+        reportError("The picker had no row titled " + JSON.stringify(text), "");
+        return finish();
+      }
       const input = document.activeElement;
       const rows = [...document.querySelectorAll('[data-slot="command-item"]')];
       if (!(input instanceof HTMLInputElement) || !rows.length) return void setTimeout(step, 50);
