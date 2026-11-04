@@ -113,7 +113,7 @@ To remove the feature's UI and runtime entirely, set `threadside.aiTraceAvailabl
 ## Good to know
 
 - **Cursor reserves its right-hand sidebar for its own agent**, so an extension cannot place a view there directly. Threadside moves its chat view there once, on first run, the same way **View: Move View** does; the editor remembers it. Move it anywhere else (or run **T3: Move Chat…**) and it stays where you put it.
-- **Drag files onto the chat with <kbd>Shift</kbd> held** to add them as chips. Cursor and VS Code pass a drag to an extension's view only while Shift is down; without it, the file simply opens in your code column (the chat column is locked, so it never splits).
+- **Drag files onto the chat with <kbd>Shift</kbd> held** to add them as chips, from the Explorer, editor tabs or search results, in local and Remote-SSH windows alike. Cursor and VS Code pass a drag from the editor to an extension's view only while Shift is down (Cline and other chat extensions have the same rule), so the bar above the chat says "⇧ Hold Shift to drop files" and the message box gets an outline once Shift lets the drag in. Without Shift the file opens in your code column instead (the chat column is locked, so it never splits). Files from Finder need no Shift: T3 Code shows its own "Drop files to attach" frame and attaches them.
 - **Voice input** follows T3 Code's web app, which uses your system's dictation.
 - Settled, snoozed and archived threads, usage-limit resets and side chats behave exactly as in T3 Code; see its [docs](https://github.com/pingdotgg/t3code/tree/main/docs/user).
 

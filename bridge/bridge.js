@@ -550,46 +550,25 @@
     }
     return Array.from(new Set(out));
   }
-  // While Shift is held over the chat, show T3 Code's own "Drop files to attach" frame, the one a file
-  // from Finder gets: T3 Code draws it for file drags only, so it gets a stand-in file drag. If this T3
-  // Code build draws nothing, the same frame is drawn here from T3 Code's own classes. Releasing Shift
-  // mid-drag makes the editor block the frame again without a dragleave, so the frame also goes away
-  // once dragover stops arriving.
-  let dropShown = false;
-  let dropOverlay;
-  let dropOverlayTimer;
-  function standInDrag(type) {
-    const transfer = new DataTransfer();
-    transfer.items.add(new File([""], "threadside-drop"));
-    return new DragEvent(type, { dataTransfer: transfer, bubbles: true, cancelable: true });
-  }
-  function setDropTarget(active) {
-    clearTimeout(dropOverlayTimer);
-    const target = composer() || document.body;
-    if (!active) {
-      if (dropShown) target.dispatchEvent(standInDrag("dragleave"));
-      if (dropOverlay) dropOverlay.remove();
-      dropShown = false;
-      return;
+  // While a Shift-drag from the editor is over the chat, the composer gets an outline, as in Cline.
+  // Releasing Shift mid-drag makes the editor block the frame again without a dragleave, so the
+  // outline also goes away once dragover stops arriving.
+  // The composer's rounded card, so the outline follows its corners.
+  function composerBox() {
+    const editor = composer();
+    for (let node = editor; node && node !== document.body; node = node.parentElement) {
+      if (parseFloat(getComputedStyle(node).borderTopLeftRadius) > 8) return node;
     }
-    dropOverlayTimer = setTimeout(() => setDropTarget(false), 400);
-    if (dropShown) return;
-    dropShown = true;
-    target.dispatchEvent(standInDrag("dragenter"));
-    requestAnimationFrame(() => {
-      if (!dropShown || document.querySelector("[data-chat-workspace-drop-overlay]")) return;
-      if (!dropOverlay) {
-        dropOverlay = document.createElement("div");
-        dropOverlay.className =
-          "pointer-events-none fixed inset-2 z-40 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/60 bg-primary/[0.035]";
-        const label = document.createElement("div");
-        label.setAttribute("role", "status");
-        label.className = "flex items-center gap-2 rounded-full border border-primary/25 bg-background/95 px-4 py-2.5 text-sm font-medium text-foreground shadow-lg";
-        label.textContent = "Drop files to attach";
-        dropOverlay.append(label);
-      }
-      document.body.append(dropOverlay);
-    });
+    return editor && (editor.closest("form") || editor.parentElement);
+  }
+  let dropOutlineTimer;
+  function setDropTarget(active) {
+    clearTimeout(dropOutlineTimer);
+    const box = composerBox();
+    if (!box) return;
+    box.style.outline = active ? "2px solid var(--primary, #6b8cff)" : "";
+    box.style.outlineOffset = active ? "1px" : "";
+    if (active) dropOutlineTimer = setTimeout(() => setDropTarget(false), 1000);
   }
   let reportedDrag = false;
   window.addEventListener(
