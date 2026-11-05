@@ -63,7 +63,7 @@ Run **T3: Use T3 for Cursor Chat Shortcuts** once to give Cursor's chat keys to 
 
 Without the takeover the same commands are on <kbd>⌃⌘L</kbd> (chat), <kbd>⌃⌘H</kbd> (search), <kbd>⌃⌘N</kbd> (new thread), <kbd>⌃⌘E</kbd> and <kbd>⌃⌘R</kbd>, and every command is in the Command Palette under **T3:**.
 
-**Inside the chat** keys belong to T3 Code (<kbd>⌘K</kbd> palette, <kbd>⌘B</kbd> sidebar, <kbd>⌘F</kbd> find, model and host pickers…), except the ones in `threadside.chatShortcuts`, which run editor commands: <kbd>⌘I</kbd>, <kbd>⇧⌘H</kbd>, <kbd>⌘L</kbd>, <kbd>⌘⇧P</kbd>, <kbd>⌘P</kbd>, <kbd>⌘E</kbd>, <kbd>⌘J</kbd>, <kbd>⌘R</kbd>, <kbd>⌃`</kbd> and the view shortcuts. Edit that setting to add or give back keys.
+**Inside the chat** keys go to T3 Code first (<kbd>⌘K</kbd> palette, <kbd>⌘B</kbd> sidebar, <kbd>⌘F</kbd> find, model and host pickers…), except the ones in `threadside.chatShortcuts`, which run editor commands ahead of it: <kbd>⌘I</kbd>, <kbd>⇧⌘H</kbd>, <kbd>⌘L</kbd>, <kbd>⌘⇧P</kbd>, <kbd>⌘P</kbd>, <kbd>⌘E</kbd>, <kbd>⌘J</kbd>, <kbd>⌘R</kbd>, <kbd>⌃`</kbd> and the view shortcuts. A shortcut T3 Code does not use goes on to the editor, so your own `keybindings.json` works from the chat as it does elsewhere, for any command and in Remote-SSH too (for example <kbd>⇧⌘I</kbd> bound to `workbench.action.toggleMaximizedAuxiliaryBar`). Text editing keys and <kbd>⌥</kbd> alone stay in the chat.
 
 ![Search threads](docs/images/search.png)
 
@@ -77,7 +77,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 ```
 
 - The tab shows the web app your server serves, through a small proxy on `127.0.0.1` that adds the session token. The page never sees the token.
-- A bridge script, added to the page by the proxy, connects the app to the editor: it opens file links at their line, turns files and selections into composer chips, maps the chat shortcuts to editor commands, reports page errors and applies the editor's colors.
+- A bridge script, added to the page by the proxy, connects the app to the editor: it opens file links at their line, turns files and selections into composer chips, maps the chat shortcuts to editor commands and hands the editor the shortcuts T3 Code leaves alone, reports page errors and applies the editor's colors.
 - The status bar and thread search come from T3 Code's own orchestration stream. Thread alerts are T3 Code's own in-app notifications (T3 Code Settings → Notifications), which Threadside turns on once per chat: a toast when another thread finishes, fails or needs you while the chat has focus.
 - A daily CI job runs `scripts/contract-check.mjs` against the newest `t3@nightly`, so a protocol or UI change upstream fails here first.
 

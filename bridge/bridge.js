@@ -204,9 +204,8 @@
     return nativeOpen(url, target, features);
   };
 
-  // Keys: the editor drops key events that a page dispatches (only trusted keys reach its keybindings),
-  // and keys typed inside this frame never reach it at all. So the shortcuts that must work from the
-  // chat are mapped to editor commands by the extension; every other key belongs to T3 Code.
+  // Keys typed inside this frame never reach the editor. `threadside.chatShortcuts` runs fixed editor
+  // commands ahead of T3 Code; T3 Code gets the rest, and what it leaves alone goes on to the editor below.
   // `mod` is ⌘ on macOS and Ctrl elsewhere; on macOS Ctrl stays `ctrl` (Ctrl+N is "next line" there).
   function chord(event) {
     const parts = [];
@@ -251,6 +250,22 @@
     },
     true,
   );
+
+  // Every other shortcut T3 Code leaves alone goes to the editor, so keybindings.json works from the
+  // chat as it does elsewhere: local or Remote-SSH, any command, its when clause included. Checked after
+  // T3 Code and the handlers below had their turn. Text editing and caret keys stay in the chat, and so
+  // does ⌥ alone on macOS, which types characters there.
+  const CHAT_KEYS = /^(?:arrow\w+|backspace|delete|home|end|pageup|pagedown|enter|tab|escape|meta|control|alt|shift|dead)$/;
+  window.addEventListener("keydown", (event) => {
+    if (!event.isTrusted || !(event.metaKey || event.ctrlKey || event.altKey)) return;
+    if (isMac && event.altKey && !event.metaKey && !event.ctrlKey) return;
+    const key = chord(event);
+    if (CHAT_KEYS.test(keyName(event)) || key in EDITING || key === "mod+w") return;
+    setTimeout(() => {
+      if (event.defaultPrevented) return;
+      post({ type: "editorKey", key: event.key, code: event.code, keyCode: event.keyCode, metaKey: event.metaKey, ctrlKey: event.ctrlKey, altKey: event.altKey, shiftKey: event.shiftKey });
+    }, 0);
+  });
 
   // ⌘+ / ⌘= and ⌘- zoom the chat, ⌘0 resets it, like T3 Code's desktop app and a browser. The editor's
   // own zoom never sees keys typed in this frame. T3 Code sizes its interface in rem, so the root font

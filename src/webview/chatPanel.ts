@@ -1,10 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
 import * as vscode from "vscode";
 import { backgroundServiceSupported, resolveT3Home } from "../connection/discovery";
 import type { Environment } from "../connection/environment";
 import { t3Shortcut } from "../connection/t3Keys";
-import { withUserChatKeys } from "../keybindings/chatKeys";
 import { log } from "../log";
 import type { AuthProxy } from "../proxy/authProxy";
 import { threadIdFromPath } from "../routes";
@@ -17,32 +15,10 @@ interface PanelState {
   path?: string;
 }
 
-let userKeybindingsFile: string | undefined;
-const keybindingListeners = new Set<() => void>();
-/** The user's keybindings.json when it is on this machine (a local window), and a signal when it changes. */
-export function setUserKeybindingsFile(path: string | undefined): void {
-  userKeybindingsFile = path;
-}
-export function userKeybindingsDidChange(): void {
-  for (const listener of keybindingListeners) listener();
-}
-
-/**
- * Shortcuts that run editor commands while the chat has focus: `threadside.chatShortcuts`, plus the
- * user's own keybindings.json rules for Threadside commands.
- */
+/** Shortcuts that run a fixed editor command while the chat has focus, ahead of T3 Code's own keys. */
 export function chatShortcuts(): Record<string, string> {
   const map = vscode.workspace.getConfiguration("threadside").get<Record<string, string>>("chatShortcuts", {});
-  const base = Object.fromEntries(Object.entries(map).filter(([chord, command]) => chord && typeof command === "string" && command));
-  if (!userKeybindingsFile) return base;
-  let text: string | undefined;
-  try {
-    text = readFileSync(userKeybindingsFile, "utf8");
-  } catch {
-    return base;
-  }
-  // Read only in a local window, so the screen's platform is this process's.
-  return withUserChatKeys(base, text, process.platform === "darwin" ? "mac" : "other");
+  return Object.fromEntries(Object.entries(map).filter(([chord, command]) => chord && typeof command === "string" && command));
 }
 
 export interface BridgeMessage {
@@ -93,7 +69,6 @@ export class ChatPanel {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration("threadside")) this.postConfig();
       }),
-      this.onUserKeybindings(() => this.postConfig()),
     );
     void this.render();
   }
@@ -156,11 +131,6 @@ export class ChatPanel {
 
   insertMentions(mentions: string[]): void {
     this.post({ type: "mentions", mentions });
-  }
-
-  private onUserKeybindings(listener: () => void): vscode.Disposable {
-    keybindingListeners.add(listener);
-    return { dispose: () => keybindingListeners.delete(listener) };
   }
 
   focusComposer(): void {
@@ -415,6 +385,14 @@ ${
         sendPalette();
       }
       if (data.type === "route") vscode.setState({ path: data.path });
+      // A shortcut T3 Code left alone: replay it on this page, which the editor's webview forwards to its
+      // keybindings, so the user's own bindings and their when clauses apply as they do outside the chat.
+      if (data.type === "editorKey") {
+        const init = { key: String(data.key), code: String(data.code), keyCode: Number(data.keyCode), metaKey: !!data.metaKey, ctrlKey: !!data.ctrlKey, altKey: !!data.altKey, shiftKey: !!data.shiftKey, bubbles: true, cancelable: true };
+        window.dispatchEvent(new KeyboardEvent("keydown", init));
+        window.dispatchEvent(new KeyboardEvent("keyup", init));
+        return;
+      }
       vscode.postMessage(data);
       return;
     }
