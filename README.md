@@ -83,25 +83,12 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 
 ## Settings
 
-**AI Trace:** click **Follow thread** above the chat to follow that conversation's file activity in the editor. It starts off in every window and after every reload. Click it again to stop following. The agent keeps running.
-
-Selecting, scrolling or editing code pauses navigation and exposes **Resume**. Switching conversations suspends the pinned conversation rather than following the new one silently. File opens preserve keyboard focus in chat, and automatically opened files do not replace your chosen editor context. A short public progress message appears beside the file activity when available.
-
-The activity strip names the thread's branch. Its tooltip distinguishes the IDE checkout at pin time from the thread checkout, which can be a separate worktree. AI Trace never checks out a branch. A branch or detached-HEAD change in either checkout suspends following before the next file open. Turn following off and on to verify the new binding. If the thread's recorded branch differs from its actual checkout, following stays paused until that mismatch is resolved.
-
-Ranges are highlighted only when provider evidence matches the displayed document. Some providers supply only file paths, and shell commands may not identify their files at all. AI Trace does not guess. It works when the extension host and T3 own the same filesystem, including Remote-SSH to that host. A separately paired remote T3 server does not drive local files.
-
-The pin identifies the conversation opened in the chat's route. Embedded subagent or side-chat panes do not silently take over that pin. Open the child conversation in its own thread tab to follow it separately.
-
-To remove the feature's UI and runtime entirely, set `threadside.aiTraceAvailable` to `false`. See [rollback instructions](docs/ai-trace-rollback.md) for restoring the previous extension version.
-
 | Setting | Default | |
 |---|---|---|
 | `threadside.serverUrl` | empty | A server to use instead of the one on this machine. |
 | `threadside.chatLocation` | `side` | Dock the chat in a side bar (the Secondary Side Bar on first run), or open it as an editor tab beside the code or in the active group. |
 | `threadside.threadScope` | `workspace` | Thread search lists this window's projects first, or every project equally. |
 | `threadside.sendEditorContext` | `true` | Send the focused file, cursor or selection, open files and Problems with a message, as a chip. |
-| `threadside.aiTraceAvailable` | `true` | Show the Follow thread button. Following itself always starts **off**. Set this to `false` to hide and stop AI Trace entirely. |
 | `threadside.checkForUpdates` | `true` | Look for newer T3 Code builds every 30 minutes and offer to update the server. |
 | `threadside.openChatOnStartup` | `true` | Show the chat when a window starts, in place of the agent pane Cursor reopens on every start. The code keeps the focus. |
 | `threadside.compactChat` | `true` | Start the narrow chat with T3 Code's thread sidebar closed. |

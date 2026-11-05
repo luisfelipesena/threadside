@@ -522,11 +522,6 @@
           "type": "boolean",
           "default": true,
           "description": "Open the chat with T3 Code's own thread sidebar closed when the column is narrow, so the conversation gets the room. ⌘B or full screen brings it back."
-        },
-        "threadside.aiTraceAvailable": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the optional Follow thread control. Following always starts off. Disable this setting to hide and stop AI Trace entirely."
         }
       }
     },
@@ -549,29 +544,7 @@
           "contextualTitle": "T3 Chat"
         }
       ]
-    },
-    "colors": [
-      {
-        "id": "threadside.traceReadBackground",
-        "description": "Subtle background for verified AI-read ranges.",
-        "defaults": {
-          "dark": "#3794FF12",
-          "light": "#005FB810",
-          "highContrast": null,
-          "highContrastLight": null
-        }
-      },
-      {
-        "id": "threadside.traceEditBackground",
-        "description": "Subtle background for verified AI-edited ranges.",
-        "defaults": {
-          "dark": "#73C99118",
-          "light": "#16825D12",
-          "highContrast": null,
-          "highContrastLight": null
-        }
-      }
-    ]
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",

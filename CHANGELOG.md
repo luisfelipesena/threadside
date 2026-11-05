@@ -40,15 +40,6 @@
 - Reconnect when the T3 Code server comes back. When no server was running at the moment Threadside looked (the desktop app was closed or restarting, or `t3 service` was restarting it), Threadside stopped trying until the window was reloaded. It now checks for a local server every 2 s and connects as soon as one starts.
 - README: run the server without the desktop app with `t3 service install`.
 
-## 0.4.0
-
-- Add **Follow thread**, an opt-in AI Trace control above the chat. Following starts off in each window and after reload.
-- Follow verified file activity without moving keyboard focus out of chat. Manual code navigation pauses following, and the same toggle stops it without stopping the agent.
-- Keep the user's chosen editor context separate from automatically opened files. Validate read and edit ranges against current file content and reject paths outside the thread checkout.
-- Show the followed branch and distinguish it from the IDE checkout. Suspend following when either checkout changes, without running Git checkout or switching the user's branch.
-- Show brief public progress text when available. Providers without precise ranges fall back to file-level activity. Paired remote servers do not navigate local files.
-- Add `threadside.aiTraceAvailable` to remove the feature's UI and runtime entirely, with documented rollback to 0.3.21.
-
 ## 0.3.21
 
 - A new window opens its chat in that window's project in Remote-SSH too. The chat reports ready before T3 Code has mounted, and through an SSH tunnel the composer could take more than the 5 s Threadside waited for it, so the new thread was never started and T3 Code's start page stayed on its first project. It now waits up to 30 s for the composer and 15 s for the project in the picker, logs which project it starts the draft in, and logs when either wait runs out.

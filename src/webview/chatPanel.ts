@@ -291,22 +291,10 @@ function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, c
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; background: var(--vscode-editor-background); color: var(--vscode-foreground); font: 13px/1.5 var(--vscode-font-family); }
-  iframe { position: fixed; inset: var(--trace-height, 36px) 0 0; width: 100%; height: calc(100% - var(--trace-height, 36px)); border: 0; display: block; }
-  #trace { box-sizing: border-box; min-height: 36px; padding: 5px 10px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; gap: 8px; font-size: 12px; }
-  #trace[hidden], #trace button[hidden] { display: none; }
-  #trace button { font: inherit; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; border: 1px solid transparent; border-radius: 4px; padding: 3px 6px; background: transparent; color: var(--vscode-foreground); cursor: pointer; }
-  #trace button:hover { background: var(--vscode-toolbar-hoverBackground); }
-  #trace button:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: 1px; }
-  #trace button[aria-pressed="true"] { background: var(--vscode-button-secondaryBackground); }
-  #trace button:disabled { opacity: .6; cursor: default; }
-  #trace-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--vscode-descriptionForeground); }
-  #trace svg { flex: none; width: 14px; height: 14px; }
-  #drop-hint { flex: none; color: var(--vscode-descriptionForeground); opacity: .75; white-space: nowrap; }
-  #trace-text:not(:empty) ~ #drop-hint { display: none; }
+  iframe { position: fixed; inset: 24px 0 0; width: 100%; height: calc(100% - 24px); border: 0; display: block; }
+  #drop-hint { box-sizing: border-box; height: 24px; padding: 0 10px; border-bottom: 1px solid var(--vscode-panel-border); display: flex; align-items: center; justify-content: flex-end; gap: 4px; font-size: 11px; color: var(--vscode-descriptionForeground); white-space: nowrap; overflow: hidden; }
   #drop-hint .short { display: none; }
   @media (max-width: 420px) { #drop-hint .long { display: none; } #drop-hint .short { display: inline; } }
-  @media (max-width: 240px) { #drop-hint { display: none; } }
-  @media (prefers-reduced-motion: no-preference) { #trace button { transition: background-color 150ms; } }
   .notice { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--vscode-editor-background); }
   .notice[hidden] { display: none; }
   .notice p { margin: 0 0 4px; max-width: 420px; }
@@ -319,15 +307,7 @@ function hostHtml(src: string | undefined, frameOrigin: string, nonce: string, c
 </style>
 </head>
 <body>
-<div id="trace" aria-label="AI Trace">
-  <button id="trace-toggle" aria-pressed="false" disabled title="Follow this thread's file activity">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M12 2v4m0 12v4M2 12h4m12 0h4"/></svg>
-    <span id="trace-label">Follow thread</span>
-  </button>
-  <span id="trace-text"></span>
-  <span id="drop-hint" title="The editor lets files from the Explorer, tabs or Finder into the chat only while Shift is held. They join your message as file chips.">⇧ <span class="long">Hold Shift to drop files</span><span class="short">Shift to drop</span></span>
-  <button id="trace-resume" hidden>Resume</button>
-</div>
+<div id="drop-hint" title="The editor lets files from the Explorer, tabs or Finder into the chat only while Shift is held. They join your message as file chips.">⇧ <span class="long">Hold Shift to drop files</span><span class="short">Shift to drop</span></div>
 ${
   src
     ? `<iframe id="chat" src="${escapeAttr(src)}" allow="clipboard-read; clipboard-write; microphone; camera; autoplay; fullscreen; display-capture" allowfullscreen></iframe>
@@ -357,15 +337,6 @@ ${
 (function () {
   const vscode = acquireVsCodeApi();
   const frame = document.getElementById("chat");
-  const trace = document.getElementById("trace");
-  const traceToggle = document.getElementById("trace-toggle");
-  const traceLabel = document.getElementById("trace-label");
-  const traceText = document.getElementById("trace-text");
-  const traceResume = document.getElementById("trace-resume");
-  traceToggle.onclick = () => vscode.postMessage({ type: "traceToggle" });
-  traceResume.onclick = () => vscode.postMessage({ type: "traceResume" });
-  const traceSize = new ResizeObserver(() => document.documentElement.style.setProperty("--trace-height", trace.hidden ? "0px" : trace.offsetHeight + "px"));
-  traceSize.observe(trace);
   if (!frame) {
     document.getElementById("connect")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "connect" }));
     document.getElementById("background")?.addEventListener("click", () => vscode.postMessage({ source: "threadside-host", type: "runInBackground" }));
@@ -405,11 +376,10 @@ ${
   // ⌘I asks for the composer before the editor has focused this view; when the view gets focus, it goes on to the composer.
   let composerFocusUntil = 0;
   window.addEventListener("focus", () => {
-    if (trace.contains(document.activeElement)) return;
     frame.focus();
     if (Date.now() < composerFocusUntil) frame.contentWindow.postMessage({ source: "threadside-host", type: "focusComposer" }, origin);
   });
-  document.addEventListener("mousedown", (event) => { if (errorBox.hidden && !event.target.closest("#trace")) frame.focus(); });
+  document.addEventListener("mousedown", (event) => { if (errorBox.hidden) frame.focus(); });
 
   // The editor's live theme colors, read from the webview's --vscode-* variables.
   function palette() {
@@ -451,18 +421,6 @@ ${
     // From the extension: the webview shell posts with this page's own origin, which no other frame
     // (the chat or anything inside it) can claim.
     if (event.origin !== window.origin || data.source !== "threadside-host") return;
-    if (data.type === "traceState") {
-      trace.hidden = data.show === false;
-      traceToggle.disabled = !data.enabled && !data.available;
-      traceToggle.setAttribute("aria-pressed", String(Boolean(data.enabled)));
-      traceToggle.title = data.enabled ? "Stop following. The agent will keep working." : data.detail;
-      traceLabel.textContent = data.enabled ? (data.paused ? "Following paused" : "Following") : "Follow thread";
-      traceText.textContent = data.enabled ? [data.detail, data.checkout, data.paused ? "" : data.insight].filter(Boolean).join(" · ") : "";
-      traceText.title = [data.label, data.detail, data.branchDetail, data.insight].filter(Boolean).join("\\n");
-      traceResume.hidden = !data.enabled || !data.paused;
-      traceResume.disabled = !data.available;
-      return;
-    }
     // These hand the keyboard to T3 Code: a picker a shortcut opens takes its own keys (⌘1-⌘9, arrows,
     // Enter) only while focus is inside its frame; otherwise the editor gets them.
     if (["focusComposer", "insert", "mentions", "shortcut"].includes(data.type)) frame.focus();
