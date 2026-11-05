@@ -67,94 +67,23 @@
     if (trustedParent && window.parent !== window) window.parent.postMessage(Object.assign({ source: BRIDGE }, message), parentOrigin);
   }
 
-  // Notifications: a webview may not ask for the browser's notification permission, so T3 Code saw
-  // it denied and kept "Thread notifications" off. Inside the editor the page gets a Notification that
-  // is always granted and hands each one to the editor, which shows it natively; clicking it there
-  // fires this notification's own click, so T3 Code opens the thread as it would in a browser.
-  const notifications = new Map();
-  let notificationSeq = 0;
-  if (trustedParent && window.parent !== window) {
-    class EditorNotification extends EventTarget {
-      static get permission() {
-        return "granted";
-      }
-      static requestPermission(callback) {
-        if (typeof callback === "function") callback("granted");
-        return Promise.resolve("granted");
-      }
-      constructor(title, options) {
-        super();
-        const opts = options || {};
-        this.title = String(title || "");
-        this.body = String(opts.body || "");
-        this.tag = String(opts.tag || "");
-        this.onclick = null;
-        this.onclose = null;
-        this.id = ++notificationSeq;
-        notifications.set(this.id, this);
-        post({ type: "notification", id: this.id, title: this.title, body: this.body, tag: this.tag, scopeKeys: projectScopeKeys() });
-      }
-      close() {
-        if (!notifications.delete(this.id)) return;
-        const event = new Event("close");
-        this.dispatchEvent(event);
-        if (typeof this.onclose === "function") this.onclose(event);
-      }
-    }
-    window.Notification = EditorNotification;
-  }
-  function clickNotification(id) {
-    const notification = notifications.get(id);
-    if (!notification) return;
-    const event = new Event("click");
-    notification.dispatchEvent(event);
-    if (typeof notification.onclick === "function") notification.onclick(event);
-  }
-
-  // The projects T3 Code's thread list is filtered to (empty: every project). Notifications follow it,
-  // so a window filtered to one project only hears about that project.
-  function projectScopeKeys() {
+  // Thread alerts come from T3 Code's own in-app toasts (Settings → Notifications), which a chat can
+  // show without a browser permission. Turn them on once; a choice made in Settings afterwards stays.
+  // Threadside 0.3.13 to 0.5.4 forced "Thread notifications" to its system notifications, which a
+  // webview cannot show without them, so that forced value goes back to off.
+  if (trustedParent) inAppNotificationsOnce();
+  function inAppNotificationsOnce() {
     try {
-      const ui = JSON.parse(localStorage.getItem("t3code:ui-state:v1") || "{}");
-      if (Array.isArray(ui.sidebarProjectScopeKeys)) return ui.sidebarProjectScopeKeys.filter((key) => typeof key === "string");
-      return typeof ui.sidebarProjectScopeKey === "string" ? [ui.sidebarProjectScopeKey] : [];
-    } catch {
-      return [];
-    }
-  }
-
-  // T3 Code's own notification choice (Settings → Thread notifications), so the extension's
-  // notifications stay quiet while T3 Code's are on, and the list filter they follow.
-  let reportedMode;
-  function reportNotificationMode() {
-    let mode = "off";
-    try {
-      mode = JSON.parse(localStorage.getItem("t3code:client-settings:v1") || "{}").notificationMode || mode;
-    } catch {
-      // unreadable settings: T3 Code's default
-    }
-    const scopeKeys = projectScopeKeys();
-    const report = JSON.stringify([mode, scopeKeys]);
-    if (report === reportedMode) return;
-    reportedMode = report;
-    post({ type: "notificationMode", mode, scopeKeys });
-  }
-  setInterval(reportNotificationMode, 3000);
-
-  // T3 Code starts with notifications off because a browser has to grant them first, and saves that
-  // "off" with its other settings. In the editor they were never grantable before, so a saved "off" is
-  // not a choice: each chat turns them on once. A choice made in Settings afterwards stays.
-  if (trustedParent) enableNotificationsOnce();
-  function enableNotificationsOnce() {
-    try {
-      if (localStorage.getItem("threadside:notificationsDefault:v2")) return;
+      if (localStorage.getItem("threadside:inAppNotifications:v1")) return;
       const raw = localStorage.getItem("t3code:client-settings:v1");
       const settings = raw ? JSON.parse(raw) : {};
-      if (!settings.notificationMode || settings.notificationMode === "off") settings.notificationMode = "notifications";
+      if (localStorage.getItem("threadside:notificationsDefault:v2") && settings.notificationMode === "notifications") settings.notificationMode = "off";
+      settings.inAppNotificationsEnabled = true;
       localStorage.setItem("t3code:client-settings:v1", JSON.stringify(settings));
-      localStorage.setItem("threadside:notificationsDefault:v2", "1");
+      localStorage.removeItem("threadside:notificationsDefault:v2");
+      localStorage.setItem("threadside:inAppNotifications:v1", "1");
     } catch {
-      // storage unavailable: T3 Code keeps its own default
+      // storage unavailable: T3 Code keeps its own settings
     }
   }
 
@@ -847,8 +776,6 @@
       case "ideContext":
         if (pendingSend && pendingSend.id === message.requestId) finishSend(message.context);
         break;
-      case "notificationClick":
-        clickNotification(message.id);
         break;
       case "palette":
         applyPalette(message.enabled ? message.vars : null);

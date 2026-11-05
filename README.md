@@ -78,7 +78,7 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 
 - The tab shows the web app your server serves, through a small proxy on `127.0.0.1` that adds the session token. The page never sees the token.
 - A bridge script, added to the page by the proxy, connects the app to the editor: it opens file links at their line, turns files and selections into composer chips, maps the chat shortcuts to editor commands, reports page errors and applies the editor's colors.
-- The status bar, notifications and thread search come from T3 Code's own orchestration stream.
+- The status bar and thread search come from T3 Code's own orchestration stream. Thread alerts are T3 Code's own in-app notifications (T3 Code Settings → Notifications), which Threadside turns on once per chat: a toast when another thread finishes, fails or needs you while the chat has focus.
 - A daily CI job runs `scripts/contract-check.mjs` against the newest `t3@nightly`, so a protocol or UI change upstream fails here first.
 
 ## Settings
@@ -95,7 +95,6 @@ Extension host ── WebSocket RPC ──▶ thread list, status, settle/snooze
 | `threadside.chatShortcuts` | see settings | Shortcuts that run editor commands while the chat has focus. |
 | `threadside.matchEditorColors` | `true` | Use the editor's colors and fonts in the chat. |
 | `threadside.openFileLinksInEditor` | `true` | Open file links in the editor (Alt-click for T3 Code's preview). |
-| `threadside.notifications` | `attention` | Notify when a thread waits for you, fails or hits a usage limit. Quiet while T3 Code's own Thread notifications are on; those show as editor notifications whose **Open thread** opens the thread in the chat. Both follow the project filter of the window's thread list and skip the thread already on screen in the focused window. |
 
 ## Good to know
 
