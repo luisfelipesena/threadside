@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0
+
+- Removed **Follow thread** (AI Trace) and `threadside.aiTraceAvailable`. The bar above the chat now holds only the Shift drop hint.
+- Removed Threadside's own thread notifications (`threadside.notifications`) and the bridge that showed T3 Code's system notifications as editor notifications. Alerts are T3 Code's own in-app toasts, turned on once per chat; a "Thread notifications" value Threadside had forced on goes back to off, since a webview cannot show system notifications.
+
 ## 0.5.4
 
 - Removed the chat's unused drag-type report. A drag from the editor still needs Shift: the editor blocks every extension view during its own drags until Shift is held, so no extension can show a drop style before that. Files from Finder are not blocked.
