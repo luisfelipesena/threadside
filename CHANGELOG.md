@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+- A shortcut T3 Code does not use now reaches the editor from inside the chat, so your `keybindings.json` applies there as everywhere else: any command, its `when` clause, and in Remote-SSH windows too (for example ⇧⌘I bound to `workbench.action.toggleMaximizedAuxiliaryBar`). Before, only `threadside.chatShortcuts` and, in local windows only, rules for `threadside.*` commands did; that keybindings.json reader is gone. T3 Code's own shortcuts, text editing keys and ⌥ alone stay in the chat.
+
 ## 0.6.0
 
 - Removed **Follow thread** (AI Trace) and `threadside.aiTraceAvailable`. The bar above the chat now holds only the Shift drop hint.
