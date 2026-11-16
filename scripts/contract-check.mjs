@@ -21,7 +21,12 @@ function token() {
 }
 
 const descriptor = await (await fetch(`${base}/.well-known/t3/environment`)).json();
-check(typeof descriptor.capabilities?.serverSelfUpdate === "string", "the descriptor says how the server updates itself (capabilities.serverSelfUpdate)");
+// Unmanaged servers (a plain `t3 serve`, as in CI) omit the key; canSelfUpdate reads that as "no".
+const selfUpdate = descriptor.capabilities?.serverSelfUpdate;
+check(
+  selfUpdate === undefined || ["boot-service", "respawn", "desktop-managed"].includes(selfUpdate),
+  `capabilities.serverSelfUpdate is absent or a known method (${selfUpdate ?? "absent"})`,
+);
 check(descriptor.orchestrationProtocolVersion === 2, `orchestration protocol is 2 (server ${descriptor.serverVersion})`);
 
 const bearer = token();
