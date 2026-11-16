@@ -64,7 +64,8 @@ check(Boolean(shell), "orchestration.subscribeShell streams a snapshot");
 if (shell) {
   check(Array.isArray(shell.threads) && Array.isArray(shell.projects), "snapshot has threads and projects");
   const thread = shell.threads[0];
-  const fields = ["id", "projectId", "title", "status", "worktreePath", "branch", "lineage", "settledAt", "snoozedUntil", "pinnedAt", "updatedAt"];
+  // Only the fields ThreadShell (src/connection/shell.ts) marks required; optional ones may be omitted upstream.
+  const fields = ["id", "projectId", "title", "status", "worktreePath", "branch", "updatedAt", "createdAt"];
   if (thread) check(fields.every((field) => field in thread), `thread shells carry ${fields.join(", ")}`);
   const project = shell.projects[0];
   if (project) check(["id", "title", "workspaceRoot"].every((field) => field in project), "project shells carry id, title, workspaceRoot");

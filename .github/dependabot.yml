@@ -1,0 +1,11 @@
+# Keeps the workflow actions current, so a runtime deprecation (such as Node 20) lands as a PR
+# that CI checks and merges, not as a warning that turns into a failure.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
